@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.*;
 import java.nio.file.*;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 import javax.imageio.ImageIO;
 
@@ -39,15 +41,26 @@ public class ProductImageStorage {
             target = managedPath(key);
             Files.createDirectories(target.getParent());
             target = managedPath(key); // Check newly created directories before writing.
+            Path root = media.getStoragePath().toAbsolutePath().normalize();
+            for (Path directory = target.getParent(); directory.startsWith(root); directory = directory.getParent()) {
+                setPosixPermissions(directory, "rwxr-xr-x");
+                if (directory.equals(root)) break; // Never change ancestors outside managed media.
+            }
             try (var output = Files.newOutputStream(target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
                 created = true;
                 output.write(bytes);
             }
+            setPosixPermissions(target, "rw-r--r--");
             return new Stored(key, media.getBaseUrl() + "/" + key);
         } catch (IOException ex) {
             if (created && target != null) deleteQuietly(key);
             throw new AdminFailure(500, "No se pudo guardar la imagen; vuelve a intentarlo");
         }
+    }
+
+    private void setPosixPermissions(Path path, String permissions) throws IOException {
+        var view = Files.getFileAttributeView(path, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        if (view != null) view.setPermissions(PosixFilePermissions.fromString(permissions));
     }
 
     private void validateContent(byte[] bytes, String ext) throws IOException {
