@@ -3,7 +3,7 @@
 set +x
 set -euo pipefail
 umask 077
-JAVA_BIN=${JAVA_BIN:-/opt/miqa-store/java21/bin/java}
+JAVA_BIN=${JAVA_BIN:-/usr/bin/java}
 APP_JAR=${APP_JAR:-/opt/miqa-store/app/miqa-store-backend.jar}
 if [[ $EUID -eq 0 || ! -t 0 ]]; then
   echo 'Run interactively as the dedicated miqa-store user, not root.' >&2
@@ -34,7 +34,7 @@ unset confirmation
 export ADMIN_BOOTSTRAP_USERNAME ADMIN_BOOTSTRAP_PASSWORD
 # DB/JWT/media variables must come from the protected external environment file.
 # No passwords in command arguments, no web listener, no schema migrations.
-"$JAVA_BIN" -jar "$APP_JAR" \
+"$JAVA_BIN" -Xms64m -Xmx192m -jar "$APP_JAR" \
   --spring.profiles.active=prod,admin-bootstrap \
   --spring.main.web-application-type=none \
   --spring.flyway.enabled=false

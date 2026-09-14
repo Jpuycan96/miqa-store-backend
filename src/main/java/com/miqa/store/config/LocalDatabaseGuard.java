@@ -51,11 +51,11 @@ public class LocalDatabaseGuard implements EnvironmentPostProcessor, Ordered {
             throw new IllegalStateException("ADMIN_JWT_EXPIRATION must be an ISO-8601 duration between PT1M and PT24H");
         }
         if (!"127.0.0.1".equals(environment.getProperty("server.address"))
-                || !"8081".equals(environment.getProperty("server.port"))
+                || !"8082".equals(environment.getProperty("server.port"))
                 || !"validate".equals(environment.getProperty("spring.jpa.hibernate.ddl-auto"))
                 || !"true".equals(environment.getProperty("spring.flyway.clean-disabled"))
                 || (!environment.matchesProfiles("admin-bootstrap") && !"true".equals(environment.getProperty("spring.flyway.enabled")))) {
-            throw new IllegalStateException("prod requires loopback:8081, Hibernate validate and safe Flyway settings");
+            throw new IllegalStateException("prod requires loopback:8082, Hibernate validate and safe Flyway settings");
         }
         if (!environment.getProperty("app.media.storage-path").startsWith("/")) {
             throw new IllegalStateException("MEDIA_STORAGE_PATH must be an absolute Linux path in prod");

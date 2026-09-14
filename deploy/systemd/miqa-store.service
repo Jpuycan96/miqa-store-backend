@@ -1,4 +1,4 @@
-# TEMPLATE ONLY. Verify Java 21 symlink and all paths before installation.
+# TEMPLATE ONLY. VPS uses global Java 21 at /usr/bin/java.
 [Unit]
 Description=MIQA Store API
 After=network.target
@@ -12,7 +12,7 @@ Group=miqa-store
 WorkingDirectory=/opt/miqa-store/app
 EnvironmentFile=/etc/miqa-store/miqa-store.env
 UnsetEnvironment=ADMIN_BOOTSTRAP_USERNAME ADMIN_BOOTSTRAP_PASSWORD
-ExecStart=/opt/miqa-store/java21/bin/java -jar /opt/miqa-store/app/miqa-store-backend.jar --spring.profiles.active=prod
+ExecStart=/usr/bin/java -Xms64m -Xmx192m -jar /opt/miqa-store/app/miqa-store-backend.jar --spring.profiles.active=prod
 Restart=on-failure
 RestartSec=10
 TimeoutStopSec=45

@@ -1,4 +1,4 @@
-# REFERENCE ONLY. No evidence that Nginx is installed on the VPS.
+# TEMPLATE ONLY. Existing Nginx 1.28.3; MIQA TLS strategy still pending.
 # Dedicated host only; do not replace existing ERP/default server blocks.
 # Certificate paths are placeholders; review TLS and Cloudflare trust first.
 server {
@@ -12,7 +12,7 @@ server {
     # Health is for localhost monitoring; never forwarded publicly by this example.
     location /actuator { return 404; }
     location /api/ {
-        proxy_pass http://127.0.0.1:8081;
+        proxy_pass http://127.0.0.1:8082;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

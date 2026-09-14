@@ -34,6 +34,18 @@ class ProductionConfigurationTest {
         assertThat(env.getProperty("server.forward-headers-strategy")).isEqualTo("framework");
         assertThat(env.getProperty("management.endpoints.web.exposure.include")).isEqualTo("health");
     }
+    @Test void productionRejectsOccupiedPortsAndLocalKeeps8081() throws Exception {
+        assertThat(production().getProperty("server.port")).isEqualTo("8082");
+        for (String port : new String[]{"8080", "8081"}) {
+            var env = production().withProperty("server.port", port);
+            assertThatThrownBy(() -> validate(env)).isInstanceOf(IllegalStateException.class);
+        }
+        var local = new MockEnvironment();
+        local.setActiveProfiles("local");
+        local.getPropertySources().addLast(new ResourcePropertySource("classpath:application-local.properties"));
+        local.getPropertySources().addLast(new ResourcePropertySource("classpath:application.properties"));
+        assertThat(local.getProperty("server.port")).isEqualTo("8081");
+    }
     @Test void rejectsMissingPlaceholderAndWeakSecretsBeforeDatabaseInitialization() throws Exception {
         for (String name : new String[]{"ADMIN_JWT_SECRET", "DB_PASSWORD", "APP_CORS_ALLOWED_ORIGINS", "MEDIA_STORAGE_PATH"}) {
             var env = production();

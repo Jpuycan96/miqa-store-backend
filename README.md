@@ -2,7 +2,9 @@
 
 ## Preparación de producción LOCAL — 14 de septiembre de 2026
 
-Perfil `prod` y plantillas VPS preparados, **sin deploy, VPS, Cloudflare, DNS, commit, push ni remote nuevo**. Frontend sigue en Cloudflare (`https://store.solucionesmicaela.com`); API futura `https://api-store.solucionesmicaela.com` en VPS, loopback `127.0.0.1:8081`, PostgreSQL `miqa_store_db` y media propios, separados del ERP.
+Perfil `prod` y plantillas VPS preparados, **sin deploy, VPS, Cloudflare, DNS, commit, push ni remote nuevo**. Frontend sigue en Cloudflare (`https://store.solucionesmicaela.com`); API futura `https://api-store.solucionesmicaela.com` en VPS, loopback `127.0.0.1:8082`, PostgreSQL `miqa_store_db` y media propios, separados del ERP.
+
+VPS auditado: Java 21 global /usr/bin/java, Nginx existente, PostgreSQL local 5432. MIQA prod 8082 interno; local conserva 8081. No abrir UFW ni tocar ERP/LaserMonitor. Heap systemd 64–192 MiB. Backup diario y retención 14 días preparados, pendientes de ensayo. TLS/Cloudflare se decidirán después; frontend fuera del VPS.
 
 Guía vigente: [deploy/README.md](deploy/README.md), con variables, PostgreSQL dedicado, Java 21, systemd, bootstrap Linux manual, proxy de referencia y pasos futuros. `deploy/env/miqa-store.env.example` solo contiene placeholders; archivos reales `*.env` y claves privadas están ignorados. Se conservan `DB_*`; prod usa `APP_CORS_ALLOWED_ORIGINS` con orígenes HTTPS exactos, sin credentials. JWT exige secreto externo base64 de al menos 32 bytes; no hay fallback ni admin predeterminado.
 
