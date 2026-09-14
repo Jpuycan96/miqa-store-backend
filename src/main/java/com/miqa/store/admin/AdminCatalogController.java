@@ -27,6 +27,16 @@ public class AdminCatalogController {
  @PostMapping("/products/{pid}/extras") @ResponseStatus(org.springframework.http.HttpStatus.CREATED) public OptionView createextras(@PathVariable String pid,@Valid @RequestBody OptionInput r){return service.saveextras(pid,null,r);}
  @PutMapping("/products/{pid}/extras/{id}") public OptionView extras(@PathVariable String pid,@PathVariable String id,@Valid @RequestBody OptionInput r){return service.saveextras(pid,id,r);}
  @PatchMapping("/products/{pid}/extras/{id}/active") public OptionView activeextras(@PathVariable String pid,@PathVariable String id,@Valid @RequestBody Active r){return service.activeextras(pid,id,r.active());}
+ @PostMapping(value="/products/{pid}/images/upload", consumes="multipart/form-data")
+ @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+ public ImageView upload(@PathVariable String pid, @RequestParam org.springframework.web.multipart.MultipartFile file,
+     @RequestParam(required=false) String altText, @RequestParam(required=false) Integer displayOrder,
+     @RequestParam(defaultValue="false") boolean primaryImage) {
+  return service.upload(pid,file,altText,displayOrder,primaryImage);
+ }
+ @PostMapping("/products/{pid}/images/{id}/remove")
+ @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+ public void removeImage(@PathVariable String pid,@PathVariable String id){service.removeImage(pid,id);}
  @GetMapping("/products/{pid}/images") public List<ImageView> images(@PathVariable String pid){return service.images(pid);}
  @PostMapping("/products/{pid}/images") @ResponseStatus(org.springframework.http.HttpStatus.CREATED) public ImageView createImage(@PathVariable String pid,@Valid @RequestBody ImageInput r){return service.saveImage(pid,null,r);}
  @PutMapping("/products/{pid}/images/{id}") public ImageView image(@PathVariable String pid,@PathVariable String id,@Valid @RequestBody ImageInput r){return service.saveImage(pid,id,r);}

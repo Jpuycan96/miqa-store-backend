@@ -1,5 +1,31 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Upload físico de imágenes — 14 de septiembre de 2026
+
+Trabajo LOCAL, sin commit, push, deploy ni acceso a producción. Al inicio ambos repositorios estaban limpios. Según el propietario, API https://api-store.solucionesmicaela.com y Nginx/media ya funcionan en producción; esas confirmaciones reemplazan los pendientes históricos de despliegue de las secciones inferiores. Esta nueva implementación todavía NO se ha desplegado.
+
+API administrativa nueva, protegida por el Bearer existente:
+- POST /api/admin/products/{pid}/images/upload, multipart/form-data: file obligatorio; altText opcional (hasta 300 caracteres), displayOrder opcional (entero no negativo), primaryImage opcional (false). Devuelve ImageView y HTTP 201.
+- POST /api/admin/products/{pid}/images/{id}/remove: HTTP 204, baja lógica, sin DELETE físico del registro. No endpoint de reactivación.
+- GET de imágenes y DTOs públicos/admin solo incluyen activas, ordenadas por displayOrder/id. POST manual y PUT de metadata existentes se conservan; el POST manual también respeta el límite de tres. No permite reemplazar la URL de un upload administrado: quitar y volver a subir.
+
+Máximo tres imágenes activas por producto, incluyendo legacy; bloqueo PESSIMISTIC_WRITE del producto compartido entre creación manual, upload, principal y baja. Prueba de dos uploads simultáneos demuestra 201/409 al competir por la tercera plaza. Primera imagen sin principal se convierte en principal; primaryImage=true desmarca la anterior. Quitar la principal promueve la primera restante por displayOrder/id. Sin orden explícito, usa máximo existente + 1, con protección de overflow.
+
+Formatos: image/jpeg (.jpg/.jpeg), image/png (.png), image/webp (.webp), hasta 5 MiB (5 MB en UI). Se comprueba MIME/extensión y firma del contenido; JPEG/PNG además verifican dimensiones mediante ImageIO sin decodificar el bitmap. WebP comprueba contenedor RIFF/WEBP, longitud y tipo de chunk, sin conversión ni decodificador adicional. Sin antivirus, reencoding ni conversión automática.
+
+ProductImageStorage genera products/{productId}/{uuid}.jpg|png|webp bajo MEDIA_STORAGE_PATH, configurado en producción como /opt/miqa-store/media. Guarda URL absoluta basada en MEDIA_BASE_URL (https://api-store.solucionesmicaela.com/media). Upload requiere base URL no vacía; responde 503 legible si falta. No endpoint de entrega local nuevo: el servidor/proxy de media configurado entrega los archivos; no se modificó Nginx/Cloudflare.
+
+V4__product_image_upload.sql agrega active (true por defecto), storage_key nullable y constraint que impide principal inactiva. V1/V2/V3 y cinco productos seed intactos. storage_key solo se asigna por el servidor y no se expone en DTO. Quitar un upload elimina su archivo después de confirmar la transacción; rollback de upload elimina el archivo nuevo. Las claves admitidas son estrictas y se rechazan traversal y symlinks en ancestros. Nunca se deriva un archivo a borrar de url ni del nombre original; legacy/URLs manuales tienen storage_key null. Si el filesystem falla durante cleanup, se registra aviso genérico sin rutas y puede quedar un archivo huérfano que requiere revisión local del storage; no hay recolector automático.
+
+MediaProperties preserva /images/... aunque MEDIA_BASE_URL esté configurada. Las referencias legacy no se migran ni se borran. URLs HTTP(S) absolutas se conservan. Frontend mantiene STORE_API_CONFIG.mediaBaseUrl vacío.
+
+Errores: 400 vacío/tipo/contenido/metadatos inválidos; 413 tamaño; 404 producto/imagen ajenos o ausentes; 409 límite. Multipart máximo 5MB por archivo y 6MB por request. Respuestas no revelan paths internos.
+
+Validación Java 21: Maven Wrapper test, 45 tests, 0 fallos, 0 errores, 0 omitidos; PostgreSQL exclusivamente miqa_store_test_db en 127.0.0.1:55432, storage @TempDir. Incluye JPG/PNG/WebP, MIME/contenido/extensión, tamaño/vacío, principal/orden/URL, límite manual y concurrente, autenticación, ownership, baja/legacy, traversal y rollback sin huérfanos. Flyway validó V1–V4 y Hibernate validate correcto. Package con -DskipTests tras suite completa aprobada genera target/miqa-store-backend-0.0.1-SNAPSHOT.jar. No aplicación de V4 en producción ni en miqa_store_db de desarrollo durante esta tarea.
+
+Frontend: upload con preview/validación, tarjetas y detalle con hasta tres imágenes, puntos manuales y visor nativo accesible compartido. Pruebas de navegador usan respuestas interceptadas localmente; no son prueba integrada de despliegue. PostgreSQL aislado local queda disponible; procesos temporales de API de tests/navegador/servidor de revisión se cerraron.
+
+
 ## Ajuste a auditoría real VPS — 14 de septiembre de 2026
 
 Estado vigente: preparación exclusivamente local. No conexión VPS, deploy, git add, commit, push, Cloudflare, SSH, frontend ni cambios ERP/LaserMonitor. Git inicial limpio; cambios de esta tarea sin staging. Esta sección actualiza las conclusiones previas.

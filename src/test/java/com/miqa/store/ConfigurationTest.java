@@ -16,6 +16,8 @@ class ConfigurationTest {
         media.setStoragePath(Path.of(".local", "media"));
         assertThat(media.publicUrl("/images/products/banner.png")).isEqualTo("/images/products/banner.png");
         media.setBaseUrl("https://media.example.test/media/");
+        assertThat(media.publicUrl("/images/products/banner.png")).isEqualTo("/images/products/banner.png");
+        assertThat(media.publicUrl("/images/hero/sample.png")).isEqualTo("/images/hero/sample.png");
         assertThat(media.publicUrl("products/banner.png")).isEqualTo("https://media.example.test/media/products/banner.png");
         assertThat(media.publicUrl("https://cdn.example.test/x.png")).isEqualTo("https://cdn.example.test/x.png");
         assertThat(media.getStoragePath()).isEqualTo(Path.of(".local", "media"));

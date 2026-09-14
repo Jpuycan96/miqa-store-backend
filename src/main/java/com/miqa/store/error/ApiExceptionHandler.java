@@ -42,8 +42,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(500).body(error(500, request.getRequestURI()));
     }
     private ApiError error(int status, String path) {
-        String code = switch (status) { case 400 -> "INVALID_REQUEST"; case 404 -> "NOT_FOUND"; case 405 -> "METHOD_NOT_ALLOWED"; default -> status >= 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR"; };
-        String message = switch (status) { case 400 -> "Parámetros de solicitud inválidos"; case 404 -> "Recurso no disponible"; case 405 -> "Método no permitido"; default -> status >= 500 ? "No se pudo completar la solicitud" : "Solicitud no permitida"; };
+        String code = switch (status) { case 400 -> "INVALID_REQUEST"; case 404 -> "NOT_FOUND"; case 413 -> "PAYLOAD_TOO_LARGE"; case 405 -> "METHOD_NOT_ALLOWED"; default -> status >= 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR"; };
+        String message = switch (status) { case 413 -> "La imagen no debe superar 5 MB"; case 400 -> "Parámetros de solicitud inválidos"; case 404 -> "Recurso no disponible"; case 405 -> "Método no permitido"; default -> status >= 500 ? "No se pudo completar la solicitud" : "Solicitud no permitida"; };
         return new ApiError(Instant.now(), status, code, message, path,
                 status == 400 ? Map.of("request", "Revisa formato y longitud de los parámetros") : Map.of());
     }

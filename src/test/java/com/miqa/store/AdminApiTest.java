@@ -20,6 +20,12 @@ import static org.assertj.core.api.Assertions.*;
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class AdminApiTest {
+ @org.junit.jupiter.api.io.TempDir static java.nio.file.Path mediaDirectory;
+ @org.springframework.test.context.DynamicPropertySource
+ static void media(org.springframework.test.context.DynamicPropertyRegistry registry){
+  registry.add("app.media.storage-path",()->mediaDirectory.toString());
+  registry.add("app.media.base-url",()->"https://api.example.test/media");
+ }
  @LocalServerPort int port;
  @Autowired JdbcTemplate jdbc; @Autowired ObjectMapper mapper; @Autowired AdminUserRepository users; @Autowired PasswordEncoder passwords; @Autowired JwtEncoder encoder;
  private final HttpClient client=HttpClient.newHttpClient();private String token,userId;
@@ -40,6 +46,97 @@ class AdminApiTest {
  private Map<String,Object> category(String slug){return new HashMap<>(Map.of("name","Admin test category","slug",slug,"description","Local test","active",true,"displayOrder",50));}
  private Map<String,Object> product(String slug,String category){var p=new HashMap<String,Object>();p.put("name","Admin test product");p.put("slug",slug);p.put("categoryId",category);p.put("shortDescription","Test");p.put("description","Test detail");p.put("saleType","QUANTITY");p.put("unitLabel","unidad");p.put("minQuantity",1);p.put("quantityStep",1);p.put("published",false);p.put("featured",false);p.put("displayOrder",50);return p;}
  private String createProduct() throws Exception{return call("POST","/products",product("admin-test-product","imprenta-papeleria"),201).get("id").asText();}
+ private byte[] imageBytes(String format)throws Exception{
+  var out=new java.io.ByteArrayOutputStream();
+  javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2,2,java.awt.image.BufferedImage.TYPE_INT_RGB),format,out);
+  return out.toByteArray();
+ }
+ private HttpResponse<String> upload(String pid,String name,String type,byte[] bytes,String fields,String bearer)throws Exception{
+  String boundary="miqa-test-boundary";
+  var out=new java.io.ByteArrayOutputStream();
+  out.write(("--"+boundary+"\r\nContent-Disposition: form-data; name=\"file\"; filename=\""+name+"\"\r\nContent-Type: "+type+"\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  out.write(bytes);
+  if(fields!=null)out.write(("\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\"primaryImage\"\r\n\r\n"+fields).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  out.write(("\r\n--"+boundary+"--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  var request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/admin/products/"+pid+"/images/upload"))
+   .header("Content-Type","multipart/form-data; boundary="+boundary);
+  if(bearer!=null)request.header("Authorization","Bearer "+bearer);
+  return client.send(request.POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray())).build(),HttpResponse.BodyHandlers.ofString());
+ }
+ @Test void uploadsJpegPngAndPromotesPrimaryWithSafePublicPaths()throws Exception{
+  String pid=createProduct();
+  var first=json(upload(pid,"../../photo.JPG","image/jpeg",imageBytes("jpg"),null,token),201);
+  assertThat(first.get("primaryImage").asBoolean()).isTrue();
+  assertThat(first.get("displayOrder").asInt()).isZero();
+  String url=first.get("url").asText();
+  assertThat(url).matches("https://api.example.test/media/products/"+pid+"/[0-9a-f-]+\\.jpg");
+  assertThat(first.get("publicUrl").asText()).isEqualTo(url);
+  var file=mediaDirectory.resolve(url.substring("https://api.example.test/media/".length()));
+  assertThat(java.nio.file.Files.readAllBytes(file)).isEqualTo(imageBytes("jpg"));
+  var second=json(upload(pid,"photo.png","image/png",imageBytes("png"),"true",token),201);
+  assertThat(second.get("displayOrder").asInt()).isEqualTo(1);
+  var list=call("GET","/products/"+pid+"/images",null,200);
+  assertThat(list.get(0).get("primaryImage").asBoolean()).isFalse();
+  assertThat(list.get(1).get("primaryImage").asBoolean()).isTrue();
+  call("POST","/products/"+pid+"/images/"+second.get("id").asText()+"/remove",null,204);
+  list=call("GET","/products/"+pid+"/images",null,200);
+  assertThat(list.size()).isEqualTo(1);assertThat(list.get(0).get("primaryImage").asBoolean()).isTrue();
+  assertThat(java.nio.file.Files.exists(mediaDirectory.resolve(second.get("url").asText().substring("https://api.example.test/media/".length())))).isFalse();
+  assertThat(java.nio.file.Files.exists(file)).isTrue();
+ }
+ @Test void uploadRejectsInvalidEmptyOversizedMissingAndUnauthenticated()throws Exception{
+  String pid=createProduct();
+  json(upload(pid,"photo.gif","image/gif",imageBytes("png"),null,token),400);
+  json(upload(pid,"photo.jpg","image/png",imageBytes("png"),null,token),400);
+  json(upload(pid,"photo.png","image/png","not an image".getBytes(),null,token),400);
+  json(upload(pid,"photo.png","image/png",new byte[0],null,token),400);
+  json(upload(pid,"photo.png","image/png",new byte[5*1024*1024+1],null,token),413);
+  json(upload("missing-product","photo.png","image/png",imageBytes("png"),null,token),404);
+  json(upload(pid,"photo.png","image/png",imageBytes("png"),null,null),401);
+ }
+ @Test void imageLimitIncludesLegacyAndManualImagesAndRemovalKeepsLegacyReferences()throws Exception{
+  String pid=createProduct(),path="/products/"+pid+"/images";
+  var legacy=call("POST",path,Map.of("url","/images/hero/sample.png","altText","Legacy","displayOrder",4,"primaryImage",true),201);
+  assertThat(legacy.get("publicUrl").asText()).isEqualTo("/images/hero/sample.png");
+  json(upload(pid,"a.png","image/png",imageBytes("png"),null,token),201);
+  json(upload(pid,"b.jpg","image/jpeg",imageBytes("jpg"),null,token),201);
+  json(upload(pid,"c.png","image/png",imageBytes("png"),null,token),409);
+  call("POST",path,Map.of("url","/images/products/old.png","altText","","displayOrder",0,"primaryImage",false),409);
+  call("POST","/products/banner/images/"+legacy.get("id").asText()+"/remove",null,404);
+  call("POST",path+"/"+legacy.get("id").asText()+"/remove",null,204);
+  assertThat(jdbc.queryForObject("select url from product_images where id=?",String.class,legacy.get("id").asText())).isEqualTo("/images/hero/sample.png");
+  assertThat(call("GET",path,null,200).get(0).get("primaryImage").asBoolean()).isTrue();
+  json(upload(pid,"new.png","image/png",imageBytes("png"),null,token),201);
+  call("PATCH","/products/"+pid+"/published",Map.of("published",true),200);
+  var publicProduct=json(send("GET","/api/public/products/admin-test-product",null,null),200);
+  assertThat(publicProduct.get("images").size()).isEqualTo(3);
+  assertThat(publicProduct.get("images").toString()).doesNotContain("/images/hero/sample.png");
+ }
+ @Autowired AdminCatalogService catalogService;
+ @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
+ @Test void rollbackRemovesUploadedFileAndPreservesDatabase()throws Exception{
+  String pid=createProduct();byte[] png=imageBytes("png");
+  var transaction=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+  String url=transaction.execute(status->{
+   var result=catalogService.upload(pid,new org.springframework.mock.web.MockMultipartFile("file","photo.png","image/png",png),"Vista frontal",7,false);
+   assertThat(result.altText()).isEqualTo("Vista frontal");assertThat(result.displayOrder()).isEqualTo(7);
+   assertThat(java.nio.file.Files.exists(mediaDirectory.resolve(result.url().substring("https://api.example.test/media/".length())))).isTrue();
+   status.setRollbackOnly();return result.url();
+  });
+  assertThat(java.nio.file.Files.exists(mediaDirectory.resolve(url.substring("https://api.example.test/media/".length())))).isFalse();
+  assertThat(call("GET","/products/"+pid+"/images",null,200).size()).isZero();
+ }
+ @Test void concurrentUploadsCannotExceedThreeImages()throws Exception{
+  String pid=createProduct();
+  json(upload(pid,"a.png","image/png",imageBytes("png"),null,token),201);
+  json(upload(pid,"b.png","image/png",imageBytes("png"),null,token),201);
+  try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+   var one=pool.submit(()->upload(pid,"c.png","image/png",imageBytes("png"),null,token).statusCode());
+   var two=pool.submit(()->upload(pid,"d.png","image/png",imageBytes("png"),null,token).statusCode());
+   assertThat(List.of(one.get(),two.get())).containsExactlyInAnyOrder(201,409);
+  }
+  assertThat(call("GET","/products/"+pid+"/images",null,200).size()).isEqualTo(3);
+ }
  @Test void authProtectsAllAdminResourcesAndLeavesPublicOpen()throws Exception{
   for(String path:List.of("/products","/categories","/auth/me","/products/banner/images","/products/banner/materials","/products/banner/extras"))json(send("GET","/api/admin"+path,null,null),401);
   assertThat(call("GET","/auth/me",null,200).get("username").asText()).isEqualTo("admin-test");

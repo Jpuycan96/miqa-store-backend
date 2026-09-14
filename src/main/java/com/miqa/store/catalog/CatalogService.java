@@ -44,7 +44,7 @@ public class CatalogService {
         return new CategoryDto(category.getId(), category.getName(), category.getSlug(), category.getDescription(), category.getDisplayOrder());
     }
     private ProductDto productDto(Product product) {
-        var images = product.getImages().stream().map(image -> new ImageDto(image.getId(), media.publicUrl(image.getUrl()), image.getAltText(), image.isPrimaryImage(), image.getDisplayOrder())).toList();
+        var images = product.getImages().stream().filter(ProductImage::isActive).map(image -> new ImageDto(image.getId(), media.publicUrl(image.getUrl()), image.getAltText(), image.isPrimaryImage(), image.getDisplayOrder())).toList();
         String primary = images.stream().filter(ImageDto::primaryImage).findFirst().or(() -> images.stream().findFirst()).map(ImageDto::url).orElse("");
         return new ProductDto(product.getId(), product.getSlug(), product.getName(), product.getShortDescription(), product.getDescription(),
                 product.getCategory().getSlug(), categoryDto(product.getCategory()), primary,

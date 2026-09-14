@@ -5,7 +5,7 @@ import java.nio.file.Path;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-/** References are stored in PostgreSQL; storage is reserved for the future VPS upload service. */
+/** Media configuration shared by catalog URL resolution and authenticated uploads. */
 @Component
 @ConfigurationProperties(prefix = "app.media")
 public class MediaProperties {
@@ -37,6 +37,6 @@ public class MediaProperties {
         if (reference.startsWith("//") || uri.getPath().contains("..") || reference.contains("\\")) {
             throw new IllegalArgumentException("Invalid media reference");
         }
-        return baseUrl.isEmpty() ? reference : baseUrl + "/" + reference.replaceFirst("^/+", "");
+        return baseUrl.isEmpty() || reference.startsWith("/images/") ? reference : baseUrl + "/" + reference.replaceFirst("^/+", "");
     }
 }

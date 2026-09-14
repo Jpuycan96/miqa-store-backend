@@ -11,6 +11,12 @@ public class ProductImage {
     @Column(nullable = false, length = 300) private String altText;
     @Column(nullable = false) private boolean primaryImage;
     @Column(nullable = false) private int displayOrder;
+    @Column(nullable = false) private boolean active = true;
+    @Column(length = 200) private String storageKey;
+    public boolean isActive() { return active; }
+    public void setActive(boolean value) { active = value; }
+    public String getStorageKey() { return storageKey; }
+    public void setStorageKey(String value) { storageKey = value; }
     public ProductImage() {}
     public String getId() { return id; }
     public String getUrl() { return url; }
