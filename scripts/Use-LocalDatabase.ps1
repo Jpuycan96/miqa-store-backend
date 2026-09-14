@@ -1,0 +1,12 @@
+﻿$ErrorActionPreference = 'Stop'
+$projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$connection = Get-Content (Join-Path $projectRoot '.local/connection.json') -Raw | ConvertFrom-Json
+$env:DB_HOST = '127.0.0.1'
+$env:DB_PORT = [string]$connection.port
+$env:DB_NAME = 'miqa_store_db'
+$env:DB_USERNAME = $connection.username
+$env:DB_PASSWORD = $connection.password
+$env:TEST_DB_PORT = [string]$connection.port
+$env:TEST_DB_USERNAME = $connection.username
+$env:TEST_DB_PASSWORD = $connection.password
+$env:SPRING_PROFILES_ACTIVE = 'local'

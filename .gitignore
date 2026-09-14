@@ -1,0 +1,18 @@
+﻿target/
+.tmp/
+.local/
+.env
+.env.*
+!.env.example
+*.log
+.idea/
+.vscode/
+*.iml
+
+# IDE, Windows and local secret configuration
+.classpath
+.project
+.settings/
+.DS_Store
+Thumbs.db
+application-local-secret.properties

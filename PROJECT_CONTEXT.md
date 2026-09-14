@@ -1,0 +1,122 @@
+﻿# MIQA Store Backend — contexto de proyecto
+
+## Cierre de versionado local ? 13 de septiembre de 2026
+
+Cierre Git LOCAL: repositorio inicializado en main, sin remoto. Se versionan Maven Wrapper, fuentes, scripts, migraciones V1/V2/V3 intactas y documentaci?n. Se excluyen .local/, .tmp/, target/, entornos/secretos locales, logs e IDE. Validaci?n Java 21: 26 tests y package correctos, tambi?n package desde una copia con solo archivos versionables. En producci?n se requerir? Java 21 instalado en el VPS; el JDK portable local no forma parte del repositorio. Sin push ni deploy.
+
+
+## Panel administrativo local — 13 de septiembre de 2026
+
+Estado vigente: frontend conectado a Store API y panel administrativo funcional. Reemplaza las referencias históricas a API de solo lectura/sin administración. Todo LOCAL; no ERP, gigantografias_db, producción, Cloudflare, commit, push o deploy.
+
+### Autenticación y primer administrador
+
+Spring Security con JWT HS256 mediante Nimbus/Spring Resource Server. Clave base64 de al menos 32 bytes aleatorios, issuer miqa-store-admin, audience miqa-store-admin-api, sub=id del administrador, iat/exp/jti. Expiración configurable de 1 minuto a 24 horas, default PT1H. Cada solicitud verifica además que AdminUser sigue activo. Password BCrypt cost 12; no registro ni recuperación. Se requieren variables de entorno, sin secreto de producción ni contraseña en Flyway.
+
+V3__admin_users.sql crea admin_users (id, username único, password_hash, active, created_at, updated_at) y trigger de actualización. V1/V2 intactas. LocalAdminBootstrap solo existe con perfil local, requiere ADMIN_BOOTSTRAP_USERNAME / ADMIN_BOOTSTRAP_PASSWORD y solo crea usuario si la tabla está vacía: nunca resetea contraseña ni reactiva usuarios existentes. Mínimo 12 caracteres y máximo 72 bytes UTF-8 para el bootstrap. El perfil test usa clave exclusiva de tests y usuarios BCrypt creados/limpiados en miqa_store_test_db.
+
+scripts/Start-LocalAdmin.ps1 inicia/reutiliza PostgreSQL propio, carga DB, reutiliza o genera clave aleatoria en .local/admin-jwt.key (ignorado) y pide contraseña con Read-Host -AsSecureString. Solo se mantiene en memoria/entorno del proceso y se elimina de la sesión al terminar; no se escribe en archivos ni se imprime. El usuario sugerido es miqa-local; el propietario elige la contraseña al ejecutarlo. Credenciales temporales de validación no sirven como cuenta permanente.
+
+```powershell
+cd D:\MIQA-STORE\miqa-store-backend
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\Start-LocalAdmin.ps1 -Username miqa-local
+# Introducir una contraseña LOCAL propia (mínimo 12 caracteres).
+# Abrir http://localhost:4200/admin/login, usuario miqa-local y esa contraseña.
+```
+
+La API debe estar detenida antes de iniciar otra instancia. Al terminar esta tarea se detiene la instancia usada para validar, dejando 8081 libre para el helper y PostgreSQL en 55432. El JDK portable existente es .tmp/jdk21/jdk-21.0.12.1+1; en otra máquina configurar JAVA_HOME con Java 21.
+
+Variables nuevas:
+
+| Variable | Uso |
+| --- | --- |
+| ADMIN_JWT_SECRET | Obligatoria, base64 de al menos 32 bytes aleatorios; helper local la carga de archivo ignorado. |
+| ADMIN_JWT_EXPIRATION | Duration ISO-8601; PT1H por defecto, entre PT1M y PT24H. |
+| ADMIN_BOOTSTRAP_USERNAME | Solo perfil local y tabla vacía. |
+| ADMIN_BOOTSTRAP_PASSWORD | Solo bootstrap local, nunca persistida sin BCrypt ni registrada. |
+
+Login aplica límite en memoria de cinco fallos por usuario/minuto y máximo de entradas pendientes; 429 al superar el límite. No reemplaza rate limiting compartido/proxy antes de producción. Login/Session tienen toString redactado, se impide DEBUG de cuerpos MVC en perfil local y los diagnósticos temporales de autenticación de la primera prueba se redactaron. No loguear headers Authorization, passwords ni tokens aun al diagnosticar.
+
+### API administrativa
+
+Todos los endpoints /api/admin/** requieren Bearer salvo POST /api/admin/auth/login. Sin cookies ni HttpSession; CSRF deshabilitado únicamente por usar autenticación Bearer en headers. /api/public/** sigue abierto. CORS exacto localhost:4200 permite Authorization y GET/POST/PUT/PATCH/OPTIONS para admin; no wildcard ni credenciales de cookie.
+
+- POST /api/admin/auth/login → {token, expiresAt}; GET /api/admin/auth/me → {id, username}.
+- GET/POST /api/admin/categories; GET/PUT /api/admin/categories/{id}; PATCH /{id}/active con {active}.
+- GET/POST /api/admin/products; GET/PUT /api/admin/products/{id}; PATCH /{id}/published con {published}; PATCH /{id}/featured con {featured}.
+- Listado admin de productos admite search, category (ID de categoría), published y featured combinados, orden displayOrder/id. La API pública conserva category como SLUG. Sin paginación en esta etapa.
+- GET/POST /api/admin/products/{pid}/materials y /extras; PUT /{optionId}; PATCH /{optionId}/active con {active}.
+- GET/POST /api/admin/products/{pid}/images; PUT /{imageId}; PATCH /{imageId}/primary con {primaryImage}.
+- No endpoints DELETE físicos. Opciones se desactivan; productos se despublican. Categorías inactivas ocultan sus productos sin cambiar published almacenado.
+
+AdminCatalogService es transaccional y devuelve DTOs (AdminDtos), no entidades. Nuevos IDs UUID string, compatibles con IDs seed. Cambios mínimos en entidades existentes: constructores/setters y callbacks timestamps para persistencia JPA. Product/Category repositorios validan slug excluyendo ID actual; restricciones DB mantienen seguridad ante carreras y duplicados devuelven 409. Option IDs siempre se buscan dentro del producto solicitado, con 404 si pertenecen a otro. Máximo una imagen primaria: bloqueo de fila del producto, limpieza/flush de principal anterior y escritura en la misma transacción; índice único de V1 conservado.
+
+QUANTITY/AREA exigen packSize/packLabel null; PACK exige packSize positivo y packLabel no vacío. Cantidades/paso positivos, orden no negativo, slugs válidos/únicos, tamaños máximos y campos requeridos validados. SEO se guarda/administra; no se activa indexación ni se altera el SEO público en esta etapa. Errores ApiError consistentes, 400 con campos, 401/403/404/409/429, 500 sin stacktrace para cliente.
+
+Media: solo referencias URL HTTP(S) o path relativo seguro, validación MediaProperties; admin devuelve url original y publicUrl resuelta. No upload, escrituras de archivo de producto ni endpoint /media. No se consulta el recurso externo desde backend. Persisten arquitectura VPS y base URL configurable. Las imágenes de prueba /images/... son referencias TEMPORALES, no arquitectura definitiva.
+
+### Validación y límites
+
+26 tests backend (sin fallos/errores/omitidos), Maven test y package Java 21 correctos. Suite AdminApiTest usa DB real de tests y prueba autenticación/expiración/usuario inactivo/401/CORS/throttle, categorías, productos, filtros/visibilidad/SEO/duplicados/saleType, materiales/extras y ownership, referencias y principal única. Suite pública y constraints siguen pasando. Flyway V1/V2/V3 con success en miqa_store_db y tests; Hibernate validate correcto.
+
+Frontend: 61 tests, build correcto y tres rutas públicas prerenderizadas; admin CSR. Prueba Edge local completa: login → categoría → producto → edición → materiales/extra/imagen → publicar → visible público → despublicar → ausente público → logout → guard. Responsive 360/390/768/1024/1440/1920, sin overflow en productos/categorías/formulario; axe sin infracciones en esas vistas a 390/1440 y sin errores JS inesperados. Evidencias ignoradas en frontend .tmp/admin-browser-check.json y capturas admin-*.png; backend .tmp/admin-tests.log y admin-package.log.
+
+La validación creó registros con slug admin-local-check-<timestamp>, nombres Prueba administrativa local / Producto prueba local editado. Al finalizar todos esos productos quedan published=false y sus categorías active=false; materiales/extras/imágenes solo asociados a esos borradores. Las cinco fichas seed siguen visibles. Administrador efímero admin-e2e-local eliminado tras cada prueba; no se entrega contraseña de tests. Crear la cuenta propia con Start-LocalAdmin.ps1.
+
+Antes de producción: secreto nuevo gestionado fuera del repo y rotación, TLS y proxy VPS, CORS exacto del dominio real, provisión de admin sin bootstrap local, permisos PostgreSQL mínimos/backups, rate limiting persistente/proxy, revisión de logs y política de sesión. JWT logout elimina copia del navegador pero no revoca por token hasta expirar (desactivar usuario revoca acceso a todos sus tokens); sin refresh tokens/blacklist. Frontend usa localStorage y por ello comparte el riesgo de XSS: revisar CSP y considerar sesión con cookie HttpOnly + CSRF/BFF en una fase posterior. No guardar claves locales ni perfiles de navegador en Git.
+
+Deuda: listados sin paginación; ediciones de producto/categoría siguen last-write-wins sin versión optimista ni historial de auditoría. Confirmación de cambio de tipo explícita en UI; no hay guard global de formularios con cambios sin guardar. Upload físico, entrega media VPS, recuperación de contraseña, múltiples roles, pagos/órdenes/ERP/SUNAT y analítica siguen fuera de alcance.
+
+
+
+
+Validación integrada final tras retomar (13/09/2026): el paquete actualizado pasó login/guard, creación de categoría y producto, edición, material/extra/imagen principal, publicación visible en /productos, edición posterior reflejada en ficha pública, despublicación y logout. Sin errores JS inesperados; sin overflow en 360/390/768/1024/1440/1920; axe sin infracciones en listado, categorías y edición a 390/1440. Se conservaron las capturas y evidencia en .tmp/admin-browser-check.json y admin-*.png.
+
+Estado final verificado en PostgreSQL: dos productos con slugs admin-local-check-1789281049545 y admin-local-check-1789358366249, ambos published=false; categorías homónimas active=false. Sus opciones/imágenes solo pertenecen a esos borradores. Cinco productos originales permanecen públicos. Usuario admin-e2e-local eliminado, admin_users vacío, preparado para crear cuenta propia con Start-LocalAdmin.ps1. No se conservó una contraseña de pruebas utilizable. Flyway V1/V2/V3 success en ambas bases; sin migraciones adicionales en la reanudación.
+
+Backend de validación detenido y puerto 8081 libre; PostgreSQL propio sigue activo en 55432. Frontend disponible en localhost:4200. Para iniciar sesión por primera vez, arrancar backend con el helper y elegir contraseña propia; no hay admin/password predeterminados. Documentación backend README/PROJECT_CONTEXT y frontend PROJECT_CONTEXT completada; no hubo cambios de implementación ni errores de compilación que requirieran rehacer archivos durante esta reanudación.
+
+Actualizado: 12 de septiembre de 2026. Trabajo exclusivamente local, sin Git inicializado, commit, push ni deploy. Frontend y ERP intactos.
+
+## Trabajo heredado y continuación
+
+Al retomar existían pom.xml (Spring Boot 4.0.8, release Java 21), Maven Wrapper 3.9.9, entidades Category/Product/ProductMaterial/ProductExtra/ProductImage, enum, repositorios, DTOs, servicio/controlador público, CORS, errores y guard local de DB, migrations V1/V2 y scripts PostgreSQL. No había tests, documentación, clúster inicializado ni build validado. Se conservaron esos archivos, corrigiendo BOM UTF-8 que impedía compilar.
+
+La continuación añadió tests reales HTTP/PostgreSQL, MediaProperties y resolución de URLs en DTO, README/AGENTS/contexto; inició un clúster aislado y corrigió el helper de arranque para separar handles de la terminal. Validación final en Temurin Java 21.0.12.1: **16 tests, 0 fallos, 0 errores, 0 omitidos**, Maven Wrapper test y package correctos. Primero se validó en Java 23 y después en Java 21 sin cambiar el Java del sistema. Flyway V1/V2 y Hibernate validate correctos tanto en miqa_store_test_db como en miqa_store_db.
+
+JAR: target/miqa-store-backend-0.0.1-SNAPSHOT.jar, aproximadamente 59 MB. Se inició con Java 21 en 127.0.0.1:8081 y se comprobaron mediante Invoke-RestMethod seis categorías, cinco productos, filtros combinados, detalle de Vinil (tres materiales/dos extras) y 404 desconocido. Luego se detuvo solo ese proceso, verificando su ruta; **8081 queda libre**. PostgreSQL de .local permanece levantado en 127.0.0.1:55432. Logs/evidencia en .tmp/tests-java21.log, package-java21.log, api.log y product-example.json, sin versionar. El helper se volvió a ejecutar y reconoció la instancia existente sin recrear datos.
+
+## Arquitectura objetivo
+
+Angular permanece en Cloudflare Workers/Static Assets. API Spring Boot en VPS, posible dominio api-store.solucionesmicaela.com (sin configurar). PostgreSQL miqa_store_db en VPS/infraestructura propia, completamente separado del ERP/gigantografias_db. Media también en VPS propio, no Cloudinary/Firebase/S3. No hay integración entre sistemas.
+
+Local: puerto HTTP 8081, bind 127.0.0.1. PostgreSQL 17 instalado se utiliza solo como binario para crear .local/postgres, puerto 55432/127.0.0.1, usuario/contraseña de desarrollo generados y guardados en .local/connection.json, ignorado. No leer/imprimir ese archivo al usuario. Base app miqa_store_db; tests miqa_store_test_db. No se toca el servicio PostgreSQL existente. scripts/Start-LocalPostgres.ps1 es idempotente, Use-LocalDatabase.ps1 carga variables de sesión y Stop-LocalPostgres.ps1 detiene solo el clúster propio.
+
+## Diseño y contrato
+
+Capas controller → servicio readOnly transaccional → repositorios JPA → PostgreSQL; DTOs records, nunca entidades serializadas. Lazy associations y BatchSize para colecciones/categoría, sin Open Session In View. Todos los endpoints son GET públicos:
+- /api/public/categories: active y orden displayOrder/id.
+- /api/public/products: published y categoría activa; filtros combinables category, search, featured. Búsqueda por nombre case-insensitive, acentos significativos, SQL wildcard escapado; featured admite true/false.
+- /api/public/products/{slug}: misma visibilidad, opciones activas e imágenes ordenadas; 404 si no está visible/no existe.
+
+IDs string preservan mocks; DTO incluye categorySlug y category, image/gallery e images con alt, published/featured, saleType/unitLabel/packSize/packLabel/minQuantity/step y arrays materials/extras. Opcionales nullable; Angular aún usa mocks y no fue modificado/conectado. No hay paginación en esta etapa; considerarla antes de catálogos grandes.
+
+Errores JSON consistentes timestamp/status/code/message/path/errors. No stacktrace al cliente. Validación de filtros y slug, 400/404/405 y 500 genérico. CORS solo localhost:4200 con perfil local; fuera de local lista configurable exacta, sin wildcard ni credenciales. No es autenticación.
+
+## Esquema y migraciones
+
+V1__initial_schema.sql: categories/products/materials/extras/images, slugs únicos y no vacíos, enum de venta por check, presentación PACK íntegra, cantidades positivas, órdenes no negativos, FK/índices, máximo una imagen primaria por producto, timestamps con triggers updatedAt. Categoría referenciada usa RESTRICT; hijos de producto CASCADE solo para mantenimiento SQL explícito. Futuro admin debe despublicar/desactivar antes que borrar. Sin precios.
+
+V2__seed_initial_catalog.sql: seis categorías y cinco productos EXACTAMENTE derivados de datos mock frontend (textos/ids/slugs/imagen/materiales/extras). Ya aplicada en tests: no editar estas migraciones, añadir una V3 si hay cambios. ddl-auto=validate; Flyway clean deshabilitado. EnvironmentPostProcessor bloquea hosts remotos y nombres distintos de miqa_store_db/miqa_store_test_db antes de crear DataSource. Al preparar despliegue VPS deberá revisarse expresamente si el host de PostgreSQL es diferente de loopback.
+
+## Media: referencias independientes de Angular
+
+ProductImage.url es string con referencia relativa o URL HTTP(S), no filesystem de frontend. MediaProperties enlaza app.media.storage-path/MEDIA_STORAGE_PATH (default .local/media) y app.media.base-url/MEDIA_BASE_URL (vacío por defecto), con validación de esquema/origen. CatalogService resuelve URLs públicas sin alterar la referencia guardada. storage-path está reservado: no se escriben ni sirven archivos todavía.
+
+Las rutas /images/... de V2 son TEMPORALES para compatibilidad visual; la API no sirve ni copia esos archivos y no depende de Angular para arrancar. Futuro admin: subir → validar → guardar en VPS bajo storage-path → referencia en PostgreSQL → URL con base-url → entrega pública por backend/proxy. El dominio API/media y topología de entrega aún no se deciden; son configurables. No se implementaron upload, /media, autenticación ni almacenamiento externo.
+
+## Validación y límites
+
+CatalogApiTest usa servidor HTTP aleatorio y PostgreSQL real con base fija de tests; comprueba seis categorías, cinco productos, filtros combinables, opciones activas, invisibilidad de borradores/categoría inactiva, JSON/errores, CORS y restricciones/historial Flyway. Fixtures reservados se limpian después de cada test. ConfigurationTest verifica media, protección DB y errores inesperados sanitizados. No H2 ni Testcontainers; tests fallan si falta PostgreSQL/credenciales, no se omiten.
+
+JDK 21 Temurin portable descargado a .tmp/jdk21/jdk-21.0.12.1+1 y checksum SHA-256 verificado para validación; Java del sistema no se cambia. .tmp, .local, target y secretos ignorados. README contiene comandos de arranque/pruebas y alternativa de DB local manual. No frontend, Cloudflare, ERP, producción, upload, admin, autenticación, pedidos, pagos ni WhatsApp Cloud API implementados en esta etapa. No hay cambios que requieran aprobación destructiva; siguiente integración/despliegue requiere nueva tarea. La ejecución de tests emite un aviso de Mockito sobre futura necesidad de javaagent y logs deliberados del caso 500/constraints; Maven finaliza correctamente, no se omiten ni silencian fallos.
