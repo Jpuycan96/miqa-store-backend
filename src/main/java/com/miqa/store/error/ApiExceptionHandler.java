@@ -37,7 +37,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ApiError> conflict(Exception ex,HttpServletRequest request){return ResponseEntity.status(409).body(new ApiError(Instant.now(),409,"CONFLICT","Ya existe un registro con ese slug o nombre; revisa los datos",request.getRequestURI(),Map.of()));}
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> unexpected(Exception exception, HttpServletRequest request) {
-        log.error("Unexpected catalog request failure", exception);
+        // Exception messages/causes may contain SQL values or authentication input.
+        log.error("Unexpected request failure; exception type: {}", exception.getClass().getName());
         return ResponseEntity.status(500).body(error(500, request.getRequestURI()));
     }
     private ApiError error(int status, String path) {

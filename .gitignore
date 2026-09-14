@@ -16,3 +16,12 @@
 .DS_Store
 Thumbs.db
 application-local-secret.properties
+
+# Real deployment environments and private keys; examples remain reviewable.
+*.env
+*.env.*
+!*.env.example
+*.key
+*.pem
+*.p12
+*.pfx

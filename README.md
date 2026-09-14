@@ -1,5 +1,17 @@
 # MIQA Store API
 
+## Preparación de producción LOCAL — 14 de septiembre de 2026
+
+Perfil `prod` y plantillas VPS preparados, **sin deploy, VPS, Cloudflare, DNS, commit, push ni remote nuevo**. Frontend sigue en Cloudflare (`https://store.solucionesmicaela.com`); API futura `https://api-store.solucionesmicaela.com` en VPS, loopback `127.0.0.1:8081`, PostgreSQL `miqa_store_db` y media propios, separados del ERP.
+
+Guía vigente: [deploy/README.md](deploy/README.md), con variables, PostgreSQL dedicado, Java 21, systemd, bootstrap Linux manual, proxy de referencia y pasos futuros. `deploy/env/miqa-store.env.example` solo contiene placeholders; archivos reales `*.env` y claves privadas están ignorados. Se conservan `DB_*`; prod usa `APP_CORS_ALLOWED_ORIGINS` con orígenes HTTPS exactos, sin credentials. JWT exige secreto externo base64 de al menos 32 bytes; no hay fallback ni admin predeterminado.
+
+Flyway V1/V2/V3 intactas y Hibernate `validate`. V2 se conserva como catálogo inicial, pero sus referencias temporales `/images/...` requieren resolver entrega antes de publicar: el ejemplo `MEDIA_BASE_URL=.../media` **aún no sirve archivos**. Sin upload ni cambios a ProductImage. Actuator expone solo health agregado; el ejemplo de proxy lo bloquea públicamente. Logs a stdout/journald, sin cuerpos de auth ni mensajes/causas de excepciones inesperadas.
+
+JAR Maven conservado: `target/miqa-store-backend-0.0.1-SNAPSHOT.jar`; futura instalación como `/opt/miqa-store/app/miqa-store-backend.jar`. No cambió `finalName` ni helpers locales. Validar con Java 21, helper de DB aislada, `./mvnw.cmd test` y `./mvnw.cmd package`; nunca contra producción.
+
+Las secciones siguientes son historial local: sus afirmaciones antiguas sobre ausencia de prod/admin/Git no representan el estado vigente. Resultados actuales al inicio de `PROJECT_CONTEXT.md`.
+
 ## Panel administrativo local — 13 de septiembre de 2026
 
 Estado vigente: frontend conectado a Store API y panel administrativo funcional. Reemplaza las referencias históricas a API de solo lectura/sin administración. Todo LOCAL; no ERP, gigantografias_db, producción, Cloudflare, commit, push o deploy.

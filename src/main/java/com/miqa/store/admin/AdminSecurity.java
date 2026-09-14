@@ -33,11 +33,13 @@ public class AdminSecurity {
     ? OAuth2TokenValidatorResult.success() : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token"))));
   return decoder;
  }
- @Bean SecurityFilterChain security(HttpSecurity http,ObjectMapper mapper) throws Exception {
+ @Bean @org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
+ SecurityFilterChain security(HttpSecurity http,ObjectMapper mapper) throws Exception {
   // Header-only bearer tokens; no cookie authentication or server session.
   return http.csrf(csrf->csrf.disable()).cors(cors->{})
    .sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
    .authorizeHttpRequests(a->a.requestMatchers(HttpMethod.POST,"/api/admin/auth/login").permitAll()
+    .requestMatchers(HttpMethod.GET,"/actuator/health").permitAll()
     .requestMatchers("/api/admin/**").authenticated().requestMatchers("/api/public/**","/error").permitAll().anyRequest().denyAll())
    .exceptionHandling(e->e.authenticationEntryPoint((q,r,x)->error(mapper,q,r,401)).accessDeniedHandler((q,r,x)->error(mapper,q,r,403)))
    .oauth2ResourceServer(o->o.jwt(j->{}).authenticationEntryPoint((q,r,x)->error(mapper,q,r,401)))

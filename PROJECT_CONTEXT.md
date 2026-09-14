@@ -1,5 +1,21 @@
 ﻿# MIQA Store Backend — contexto de proyecto
 
+## Preparación de producción LOCAL — 14 de septiembre de 2026
+
+Estado vigente: archivos locales para futuro VPS, sin desplegar, crear remotos, commit/push, tocar Cloudflare/DNS, ERP ni PostgreSQL de producción. Frontend intacto: `https://store.solucionesmicaela.com` en Cloudflare Workers/Static Assets. API futura `https://api-store.solucionesmicaela.com`, Java 21/Spring Boot en VPS, bind `127.0.0.1:8081`; DB `miqa_store_db` y media propios, separados del ERP.
+
+`application-prod.properties` requiere DB_* existentes, ADMIN_JWT_SECRET/EXPIRATION, APP_CORS_ALLOWED_ORIGINS, MEDIA_STORAGE_PATH/BASE_URL. Sin fallback de secretos, Hibernate validate, Flyway habilitado/clean deshabilitado, Hikari máximo 5/mínimo 1. Guardas previas al DataSource rechazan base de tests/ERP/remota, prod+local/test, bind público, DDL inseguro, JWT inválido y CORS no HTTPS. Desarrollo local conservado. Proxy headers mediante framework; el proxy confiable debe sobrescribirlos.
+
+Bootstrap explícito `prod,admin-bootstrap`: non-web, Flyway deshabilitado, transacción/bloqueo de admin_users para crear únicamente la primera cuenta BCrypt. No sobrescribe/agrega si ya existe una. Arranque normal no registra este runner. Script Linux con entrada oculta/confirmación y variables efímeras; sin password en history/argumentos. No ejecutado contra producción.
+
+Plantillas systemd, entorno y Nginx bajo deploy/, más guía `deploy/README.md`: usuario dedicado, Java 21, entorno externo root-only, journald y media escribible; nada instalado. No se identificó proxy existente: Nginx es referencia. Actuator solo health agregado, sin detalles/JMX/endpoints sensibles; bloqueado al exterior en ejemplo. Errores inesperados registran solo tipo de excepción, sin SQL/passwords/tokens.
+
+V1/V2/V3 preservadas. V2 mantiene seis categorías/cinco productos como catálogo inicial; imágenes `/images/...` temporales. **MEDIA_BASE_URL del ejemplo aún apunta a un servicio inexistente**: resolver transición/entrega antes de publicar y actualizar referencias por admin/nueva migración. Sin upload/controlador media ni cambios a ProductImage. JAR `target/miqa-store-backend-0.0.1-SNAPSHOT.jar`; nombre estable al copiar para instalación, sin cambiar helpers.
+
+Antes del VPS: inspeccionar OS/proxy/Java/systemd/puertos, TLS Full(strict)/confianza IP Cloudflare, aislamiento/permisos DB/backups, secretos y recuperación de admin, media y rate limiting login. Límite en memoria existente conservado, sin nueva solución improvisada. API base URL frontend cambiará solo cuando API prod funcione. Historial inferior supersedido por esta sección y deploy/README.md para producción.
+
+Validación final Java 21: `mvnw.cmd test` y `mvnw.cmd package` BUILD SUCCESS; 36 tests, 0 fallos/errores/omitidos, solo PostgreSQL local aislado `miqa_store_test_db`. Flyway validó tres migraciones y esquema versión 3 al día; archivos V1/V2/V3 sin diff. Health HTTP devuelve únicamente status UP; endpoints sensibles bloqueados. Pruebas nuevas de configuración prod, JWT/CORS, bootstrap transaccional sin sobrescritura y arranque non-web, sin conexión de producción. Bash `-n` correcto. systemd/Nginx/TLS y bootstrap interactivo completo Linux no ejecutados. Logs ignorados `.tmp/prod-preparation-tests.log` y `.tmp/prod-preparation-package.log`. Git sin staging/commit; frontend limpio, backend sin remoto. JAR ejecutable generado; plantillas requieren revisión de infraestructura antes de instalar.
+
 ## Cierre de versionado local ? 13 de septiembre de 2026
 
 Cierre Git LOCAL: repositorio inicializado en main, sin remoto. Se versionan Maven Wrapper, fuentes, scripts, migraciones V1/V2/V3 intactas y documentaci?n. Se excluyen .local/, .tmp/, target/, entornos/secretos locales, logs e IDE. Validaci?n Java 21: 26 tests y package correctos, tambi?n package desde una copia con solo archivos versionables. En producci?n se requerir? Java 21 instalado en el VPS; el JDK portable local no forma parte del repositorio. Sin push ni deploy.

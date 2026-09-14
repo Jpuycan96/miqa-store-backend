@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class MiqaStoreApplication {
     public static void main(String[] args) {
-        SpringApplication.run(MiqaStoreApplication.class, args);
+        var context = SpringApplication.run(MiqaStoreApplication.class, args);
+        if (context.getEnvironment().matchesProfiles("admin-bootstrap")) context.close();
     }
 }

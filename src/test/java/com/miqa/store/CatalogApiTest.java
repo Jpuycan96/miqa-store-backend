@@ -54,6 +54,12 @@ class CatalogApiTest {
     @Test void categoriesAreActiveAndOrdered() throws Exception {
         assertThat(slugs(json("/api/public/categories"))).containsExactly("impresion-gran-formato","letreros-publicitarios","merchandising","imprenta-papeleria","senaletica","branding-instalaciones");
     }
+    @Test void healthIsAggregateOnlyAndSensitiveActuatorEndpointsAreNotPublic() throws Exception {
+        assertThat(json("/actuator/health").toString()).isEqualTo("{\"status\":\"UP\"}");
+        for (String path : List.of("/actuator", "/actuator/env", "/actuator/beans", "/actuator/configprops", "/actuator/heapdump")) {
+            assertThat(request(path).statusCode()).isIn(401, 403, 404);
+        }
+    }
     @Test void productsArePublishedOrderedAndCompatible() throws Exception {
         var products = json("/api/public/products");
         assertThat(slugs(products)).containsExactly("tarjetas-personales","volantes-a5","roll-up","vinil-impreso","banner");
