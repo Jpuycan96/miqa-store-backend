@@ -58,9 +58,13 @@ class ProductionConfigurationTest {
         }
     }
     @Test void productionCannotUseTestsERPRemoteDatabaseOrUnsafeDdlAndBind() throws Exception {
-        for (var entry : java.util.Map.of("DB_NAME", "miqa_store_test_db", "DB_HOST", "external.test",
-                "server.address", "0.0.0.0", "spring.jpa.hibernate.ddl-auto", "update",
-                "spring.flyway.enabled", "false", "APP_CORS_ALLOWED_ORIGINS", "http://localhost:4200").entrySet()) {
+        for (String databaseName : new String[]{"miqa_store_test_db", "miqa_store_dev_db"}) {
+            var env = production().withProperty("DB_NAME", databaseName);
+            assertThatThrownBy(() -> validate(env)).isInstanceOf(IllegalStateException.class);
+        }
+        for (var entry : java.util.Map.of("DB_HOST", "external.test", "server.address", "0.0.0.0",
+                "spring.jpa.hibernate.ddl-auto", "update", "spring.flyway.enabled", "false",
+                "APP_CORS_ALLOWED_ORIGINS", "http://localhost:4200").entrySet()) {
             var env = production().withProperty(entry.getKey(), entry.getValue());
             assertThatThrownBy(() -> validate(env)).isInstanceOf(IllegalStateException.class);
         }

@@ -1,5 +1,25 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Inicio local con DB DEV compartida — 15 de septiembre de 2026
+
+`scripts/Start-Dev.ps1` levanta el backend local contra `miqa_store_dev_db` mediante un túnel SSH que debe estar abierto previamente en `127.0.0.1:5433`. El helper comprueba el puerto antes de solicitar credenciales; si no está disponible, se detiene e indica el comando SSH que debe ejecutarse en otra terminal. No abre el túnel automáticamente ni se conecta directamente al puerto PostgreSQL del VPS.
+
+Desde cualquier PowerShell puede invocarse por su ruta; el script resuelve y cambia a la raíz del proyecto antes de ejecutar Maven:
+
+```powershell
+ssh -p 2222 -N -L 5433:localhost:5432 -o ServerAliveInterval=60 root@64.176.22.247
+# En otra terminal:
+& 'D:\MIQA-STORE\miqa-store-backend\scripts\Start-Dev.ps1'
+```
+
+El helper configura solo el entorno del proceso de PowerShell para usar `127.0.0.1:5433`, el rol `miqa_store_dev`, perfil `local`, CORS `http://localhost:4200`, media en `.local/media` y base `http://localhost:8081/media`. Solicita `DB_PASSWORD` de forma oculta y genera un `ADMIN_JWT_SECRET` aleatorio de 32 bytes para cada ejecución; ninguno se imprime ni se guarda y ambos se eliminan del entorno al terminar Spring. `.local/` ya está excluido de Git. El flujo no cambia los helpers de PostgreSQL local, archivos `application*.properties`, Flyway ni producción.
+
+Validación local del helper: análisis sintáctico de PowerShell correcto, configuración/limpieza esperadas presentes y `git diff --check` correcto. No se inició Spring ni se introdujeron credenciales durante la validación.
+
+## Base DEV compartida mediante túnel SSH — 15 de septiembre de 2026
+
+`LocalDatabaseGuard` permite, con el perfil de desarrollo, `miqa_store_dev_db` además de `miqa_store_db` y `miqa_store_test_db`. El desarrollo compartido puede alcanzarse mediante un túnel SSH: el JDBC del backend sigue usando `localhost` o `127.0.0.1` porque el túnel termina localmente. El perfil `prod` continúa restringido exclusivamente a `miqa_store_db` y rechaza `miqa_store_dev_db`; `miqa_store_test_db` permanece reservado para tests. No se modificaron `application-prod.properties`, Flyway ni las migraciones.
+
 ## Upload físico de imágenes — 14 de septiembre de 2026
 
 Trabajo LOCAL, sin commit, push, deploy ni acceso a producción. Al inicio ambos repositorios estaban limpios. Según el propietario, API https://api-store.solucionesmicaela.com y Nginx/media ya funcionan en producción; esas confirmaciones reemplazan los pendientes históricos de despliegue de las secciones inferiores. Esta nueva implementación todavía NO se ha desplegado.

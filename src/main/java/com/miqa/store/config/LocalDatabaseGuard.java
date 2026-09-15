@@ -15,11 +15,11 @@ public class LocalDatabaseGuard implements EnvironmentPostProcessor, Ordered {
         }
         if (environment.matchesProfiles("prod")) validateProduction(environment);
         String url = environment.getProperty("spring.datasource.url", "");
-        if (!url.matches("jdbc:postgresql://(?:localhost|127\\.0\\.0\\.1):[0-9]{1,5}/miqa_store_(?:test_)?db")) {
-            throw new IllegalStateException("Only local miqa_store_db or miqa_store_test_db is allowed in this stage");
+        if (!url.matches("jdbc:postgresql://(?:localhost|127\\.0\\.0\\.1):[0-9]{1,5}/miqa_store_(?:dev_|test_)?db")) {
+            throw new IllegalStateException("Only local miqa_store_db, miqa_store_dev_db or miqa_store_test_db is allowed in this stage");
         }
         if (environment.matchesProfiles("prod") && !url.endsWith("/miqa_store_db")) {
-            throw new IllegalStateException("Production requires miqa_store_db; test databases are forbidden");
+            throw new IllegalStateException("Production requires miqa_store_db; non-production databases are forbidden");
         }
     }
     private void validateProduction(ConfigurableEnvironment environment) {

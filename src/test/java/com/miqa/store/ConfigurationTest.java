@@ -36,6 +36,14 @@ class ConfigurationTest {
         }
         guard.postProcessEnvironment(new MockEnvironment().withProperty("spring.datasource.url","jdbc:postgresql://127.0.0.1:55432/miqa_store_test_db"),new SpringApplication());
     }
+    @Test void databaseGuardAllowsSharedDevelopmentDatabaseOnLocalProfile() {
+        var environment = new MockEnvironment().withProperty("spring.datasource.url",
+                "jdbc:postgresql://localhost:5432/miqa_store_dev_db");
+        environment.setActiveProfiles("local");
+
+        assertThatCode(() -> new LocalDatabaseGuard().postProcessEnvironment(environment, new SpringApplication()))
+                .doesNotThrowAnyException();
+    }
     @Test void authenticationObjectsNeverPrintCredentials() {
         assertThat(new com.miqa.store.admin.AdminAuthController.Login("admin", "private-password").toString()).doesNotContain("private-password");
         assertThat(new com.miqa.store.admin.AdminAuthController.Session("private-token",java.time.Instant.now()).toString()).doesNotContain("private-token");
