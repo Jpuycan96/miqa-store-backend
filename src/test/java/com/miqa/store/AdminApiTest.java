@@ -43,7 +43,7 @@ class AdminApiTest {
  }
  private JsonNode json(HttpResponse<String> r,int status){assertThat(r.statusCode()).withFailMessage("Expected %s, got %s: %s",status,r.statusCode(),r.body()).isEqualTo(status);return mapper.readTree(r.body());}
  private JsonNode call(String method,String path,Object body,int status)throws Exception{return json(send(method,"/api/admin"+path,body,token),status);}
- private Map<String,Object> category(String slug){return new HashMap<>(Map.of("name","Admin test category","slug",slug,"description","Local test","active",true,"displayOrder",50));}
+ private Map<String,Object> category(String slug){var category=new HashMap<String,Object>();category.put("name","Admin test category");category.put("slug",slug);category.put("description","Local test");category.put("catalogHeadline","  Make it visible.  ");category.put("catalogDescription","  Commercial description.  ");category.put("active",true);category.put("displayOrder",50);return category;}
  private Map<String,Object> product(String slug,String category){var p=new HashMap<String,Object>();p.put("name","Admin test product");p.put("slug",slug);p.put("categoryId",category);p.put("shortDescription","Test");p.put("description","Test detail");p.put("saleType","QUANTITY");p.put("unitLabel","unidad");p.put("minQuantity",1);p.put("quantityStep",1);p.put("published",false);p.put("featured",false);p.put("displayOrder",50);return p;}
  private String createProduct() throws Exception{return call("POST","/products",product("admin-test-product","imprenta-papeleria"),201).get("id").asText();}
  private byte[] imageBytes(String format)throws Exception{
@@ -156,11 +156,13 @@ class AdminApiTest {
   json(send("POST","/api/admin/auth/login",Map.of("username","admin-test","password","Test-only-password-2026"),null),401);
  }
  @Test void categoryLifecycleAndDuplicateSlug()throws Exception{
-  var input=category("admin-test-category");String id=call("POST","/categories",input,201).get("id").asText();
+ var input=category("admin-test-category");String id=call("POST","/categories",input,201).get("id").asText();
   assertThat(call("GET","/categories",null,200).size()).isEqualTo(7);
-  call("GET","/categories/"+id,null,200);input.put("name","Edited category");
-  assertThat(call("PUT","/categories/"+id,input,200).get("name").asText()).isEqualTo("Edited category");
+  var created=call("GET","/categories/"+id,null,200);assertThat(created.get("catalogHeadline").asText()).isEqualTo("Make it visible.");assertThat(created.get("catalogDescription").asText()).isEqualTo("Commercial description.");input.put("name","Edited category");input.put("catalogHeadline","Updated headline");input.put("catalogDescription","Updated description");
+  var updated=call("PUT","/categories/"+id,input,200);assertThat(updated.get("name").asText()).isEqualTo("Edited category");assertThat(updated.get("catalogHeadline").asText()).isEqualTo("Updated headline");assertThat(updated.get("catalogDescription").asText()).isEqualTo("Updated description");
   call("POST","/categories",input,409);input.put("slug","INVALID");call("POST","/categories",input,400);
+  input.put("slug","admin-test-invalid-html");input.put("catalogHeadline","<b>Unsafe</b>");call("POST","/categories",input,400);
+  input.put("catalogHeadline","a".repeat(201));call("POST","/categories",input,400);
   assertThat(call("PATCH","/categories/"+id+"/active",Map.of("active",false),200).get("active").asBoolean()).isFalse();
   call("DELETE","/categories/"+id,null,405);
  }

@@ -17,14 +17,15 @@ public class AdminCatalogService {
  private Product entity(String id){return products.findById(id).orElseThrow(this::missing);}
  private Category categoryEntity(String id){return categories.findById(id).orElseThrow(this::missing);}
  public CategoryView category(String id){return categoryView(categoryEntity(id));}
- private CategoryView categoryView(Category c){return new CategoryView(c.getId(),c.getName(),c.getSlug(),c.getDescription(),c.isActive(),c.getDisplayOrder());}
+ private CategoryView categoryView(Category c){return new CategoryView(c.getId(),c.getName(),c.getSlug(),c.getDescription(),c.getCatalogHeadline(),c.getCatalogDescription(),c.isActive(),c.getDisplayOrder());}
  public List<CategoryView> categories(){return categories.findAll(Sort.by("displayOrder","id")).stream().map(this::categoryView).toList();}
  @Transactional public CategoryView saveCategory(String id,CategoryInput r){
   Category c=id==null?new Category():categoryEntity(id);if(id==null)c.setId(id());
   if(categories.existsBySlugAndIdNot(r.slug(),c.getId()))throw new AdminFailure(409,"El slug de categoria ya existe");
-  c.setName(r.name().trim());c.setSlug(r.slug());c.setDescription(r.description());c.setActive(r.active());c.setDisplayOrder(r.displayOrder());
+  c.setName(r.name().trim());c.setSlug(r.slug());c.setDescription(r.description());c.setCatalogHeadline(clean(r.catalogHeadline()));c.setCatalogDescription(clean(r.catalogDescription()));c.setActive(r.active());c.setDisplayOrder(r.displayOrder());
   if(id==null)em.persist(c);em.flush();return categoryView(c);
  }
+ private String clean(String value){if(value==null)return null;String cleaned=value.trim();return cleaned.isEmpty()?null:cleaned;}
  @Transactional public CategoryView activeCategory(String id,boolean active){var c=categoryEntity(id);c.setActive(active);return categoryView(c);}
  public ProductView product(String id){return view(entity(id));}
  public List<ProductView> products(String category,String search,Boolean published,Boolean featured){

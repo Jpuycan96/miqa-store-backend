@@ -4,8 +4,10 @@ import jakarta.validation.constraints.*;
 import java.util.List;
 public final class AdminDtos {
  private AdminDtos(){}
- public record CategoryInput(@NotBlank @Size(max=160) String name,@NotBlank @Size(max=160) @Pattern(regexp="^[a-z0-9]+(-[a-z0-9]+)*$") String slug,@Size(max=10000) String description,@NotNull Boolean active,@NotNull @Min(0) Integer displayOrder){}
- public record CategoryView(String id,String name,String slug,String description,boolean active,int displayOrder){}
+ public record CategoryInput(@NotBlank @Size(max=160) String name,@NotBlank @Size(max=160) @Pattern(regexp="^[a-z0-9]+(-[a-z0-9]+)*$") String slug,@Size(max=10000) String description,
+  @Size(max=200) @Pattern(regexp="^[^<>]*$") String catalogHeadline,@Size(max=500) @Pattern(regexp="^[^<>]*$") String catalogDescription,
+  @NotNull Boolean active,@NotNull @Min(0) Integer displayOrder){}
+ public record CategoryView(String id,String name,String slug,String description,String catalogHeadline,String catalogDescription,boolean active,int displayOrder){}
  public record ProductInput(@NotBlank @Size(max=64) String categoryId,@NotBlank @Size(max=200) String name,
   @NotBlank @Size(max=160) @Pattern(regexp="^[a-z0-9]+(-[a-z0-9]+)*$") String slug,
   @NotNull @Size(max=500) String shortDescription,@NotNull @Size(max=20000) String description,

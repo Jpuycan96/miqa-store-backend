@@ -41,7 +41,8 @@ public class CatalogService {
                 .orElseThrow(() -> new CatalogNotFoundException("Producto no disponible")));
     }
     private CategoryDto categoryDto(Category category) {
-        return new CategoryDto(category.getId(), category.getName(), category.getSlug(), category.getDescription(), category.getDisplayOrder());
+        return new CategoryDto(category.getId(), category.getName(), category.getSlug(), category.getDescription(),
+                category.getCatalogHeadline(), category.getCatalogDescription(), category.getDisplayOrder());
     }
     private ProductDto productDto(Product product) {
         var images = product.getImages().stream().filter(ProductImage::isActive).map(image -> new ImageDto(image.getId(), media.publicUrl(image.getUrl()), image.getAltText(), image.isPrimaryImage(), image.getDisplayOrder())).toList();

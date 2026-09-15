@@ -1,5 +1,10 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Cabeceras de categoría administrables — 15 de septiembre de 2026
+
+- V5 agrega `catalog_headline` (200) y `catalog_description` (500) opcionales a `categories`, con restricciones de texto plano, e inicializa las seis categorías por slug. La entidad y los DTO públicos/admin exponen `catalogHeadline` y `catalogDescription`; el guardado administrativo normaliza espacios y valores vacíos a null.
+- Los endpoints existentes de categorías se extendieron sin crear recursos paralelos. Se añadieron pruebas para seed/serialización pública, actualización, trim, límites y rechazo de HTML. Compilación limpia y package sin tests correctos con Java 21. Las suites HTTP/Flyway no pudieron arrancar porque PostgreSQL de tests no escuchaba en 127.0.0.1:55432 y el helper no encontró binarios PostgreSQL instalados; no se usó ninguna otra base.
+
 ## Inicio local con DB DEV compartida — 15 de septiembre de 2026
 
 `scripts/Start-Dev.ps1` levanta el backend local contra `miqa_store_dev_db` mediante un túnel SSH que debe estar abierto previamente en `127.0.0.1:5433`. El helper comprueba el puerto antes de solicitar credenciales; si no está disponible, se detiene e indica el comando SSH que debe ejecutarse en otra terminal. No abre el túnel automáticamente ni se conecta directamente al puerto PostgreSQL del VPS.

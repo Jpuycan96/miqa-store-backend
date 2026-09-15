@@ -11,6 +11,8 @@ public class Category extends TimestampedEntity {
     @Column(nullable = false, length = 160) private String name;
     @Column(nullable = false, unique = true, length = 160) private String slug;
     @Column(columnDefinition = "text") private String description;
+    @Column(length = 200) private String catalogHeadline;
+    @Column(length = 500) private String catalogDescription;
     @Column(nullable = false) private boolean active;
     @Column(nullable = false) private int displayOrder;
     public Category() {}
@@ -18,12 +20,16 @@ public class Category extends TimestampedEntity {
     public String getName() { return name; }
     public String getSlug() { return slug; }
     public String getDescription() { return description; }
+    public String getCatalogHeadline() { return catalogHeadline; }
+    public String getCatalogDescription() { return catalogDescription; }
     public boolean isActive() { return active; }
     public int getDisplayOrder() { return displayOrder; }
     public void setId(String value) { this.id = value; }
     public void setName(String value) { this.name = value; }
     public void setSlug(String value) { this.slug = value; }
     public void setDescription(String value) { this.description = value; }
+    public void setCatalogHeadline(String value) { this.catalogHeadline = value; }
+    public void setCatalogDescription(String value) { this.catalogDescription = value; }
     public void setActive(boolean value) { this.active = value; }
     public void setDisplayOrder(int value) { this.displayOrder = value; }
 }

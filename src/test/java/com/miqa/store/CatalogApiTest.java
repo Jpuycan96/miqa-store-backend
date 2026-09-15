@@ -52,7 +52,19 @@ class CatalogApiTest {
         return array.valueStream().map(node -> node.get("slug").asText()).toList();
     }
     @Test void categoriesAreActiveAndOrdered() throws Exception {
-        assertThat(slugs(json("/api/public/categories"))).containsExactly("impresion-gran-formato","letreros-publicitarios","merchandising","imprenta-papeleria","senaletica","branding-instalaciones");
+        var categories = json("/api/public/categories");
+        assertThat(slugs(categories)).containsExactly("impresion-gran-formato","letreros-publicitarios","merchandising","imprenta-papeleria","senaletica","branding-instalaciones");
+        assertThat(categories.valueStream().map(category -> category.get("catalogHeadline").asText())).containsExactly(
+                "Imprime tus ideas.", "Haz visible tu marca.", "Personaliza lo que quieras.",
+                "Tu marca también está en los detalles.", "Comunica, orienta y destaca.",
+                "Soluciones integrales a la medida de tu marca.");
+        assertThat(categories.valueStream().map(category -> category.get("catalogDescription").asText())).containsExactly(
+                "Soluciones de impresión para interiores y exteriores.",
+                "Letreros y soluciones para fachadas, negocios y espacios comerciales.",
+                "Productos personalizados para tu marca, negocio o evento.",
+                "Tarjetas, volantes, dípticos, calendarios y papelería corporativa.",
+                "Señalización personalizada para empresas y espacios.",
+                "Diseño, producción e instalación en un solo lugar.");
     }
     @Test void healthIsAggregateOnlyAndSensitiveActuatorEndpointsAreNotPublic() throws Exception {
         assertThat(json("/actuator/health").toString()).isEqualTo("{\"status\":\"UP\"}");
@@ -133,9 +145,10 @@ class CatalogApiTest {
         }
     }
     @Test void flywayAppliedMigrationsAndConstraintsAreEnforced() {
-        assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success", Integer.class)).isEqualTo(4);
+        assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success", Integer.class)).isEqualTo(5);
         assertThatThrownBy(() -> jdbc.update("update products set pack_size=null where id='tarjetas-personales'")).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("delete from categories where id='imprenta-papeleria'")).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("insert into product_images(id,product_id,url,alt_text,primary_image) values ('duplicate-primary','banner','/x.png','x',true)")).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("update categories set catalog_headline='<strong>Unsafe</strong>' where id='senaletica'")).isInstanceOf(DataIntegrityViolationException.class);
     }
 }
