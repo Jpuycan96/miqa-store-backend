@@ -71,8 +71,10 @@ public class AdminCatalogService {
  private ProductMaterial materialsEntity(String pid,String id){return em.createQuery("select x from ProductMaterial x where x.product.id=:pid and x.id=:id",ProductMaterial.class).setParameter("pid",pid).setParameter("id",id).getResultStream().findFirst().orElseThrow(this::missing);}
  @Transactional public OptionView savematerials(String pid,String id,OptionInput r){
   var p=entity(pid);var x=id==null?new ProductMaterial():materialsEntity(pid,id);if(id==null){x.setId(id());x.setProduct(p);}
-  x.setName(r.name().trim());x.setActive(r.active());x.setDisplayOrder(r.displayOrder());if(id==null)em.persist(x);em.flush();return new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder());
+  String name=r.name().trim();if(name.codePoints().noneMatch(Character::isLetterOrDigit))throw new AdminFailure(400,"El nombre del material debe incluir al menos una letra o numero");
+  x.setName(name);x.setActive(r.active());x.setDisplayOrder(r.displayOrder());if(id==null)em.persist(x);em.flush();return new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder());
  }
+ @Transactional public void deleteMaterial(String pid,String id){entity(pid);var x=materialsEntity(pid,id);em.remove(x);em.flush();}
  @Transactional public OptionView activematerials(String pid,String id,boolean value){var x=materialsEntity(pid,id);x.setActive(value);return new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder());}
  public List<OptionView> extras(String pid){entity(pid);return em.createQuery("select x from ProductExtra x where x.product.id=:pid order by x.displayOrder,x.id",ProductExtra.class).setParameter("pid",pid).getResultList().stream().map(x->new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder())).toList();}
  private ProductExtra extrasEntity(String pid,String id){return em.createQuery("select x from ProductExtra x where x.product.id=:pid and x.id=:id",ProductExtra.class).setParameter("pid",pid).setParameter("id",id).getResultStream().findFirst().orElseThrow(this::missing);}

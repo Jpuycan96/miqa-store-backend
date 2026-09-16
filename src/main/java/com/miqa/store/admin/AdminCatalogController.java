@@ -22,6 +22,7 @@ public class AdminCatalogController {
  @GetMapping("/products/{pid}/materials") public List<OptionView> materials(@PathVariable String pid){return service.materials(pid);}
  @PostMapping("/products/{pid}/materials") @ResponseStatus(org.springframework.http.HttpStatus.CREATED) public OptionView creatematerials(@PathVariable String pid,@Valid @RequestBody OptionInput r){return service.savematerials(pid,null,r);}
  @PutMapping("/products/{pid}/materials/{id}") public OptionView materials(@PathVariable String pid,@PathVariable String id,@Valid @RequestBody OptionInput r){return service.savematerials(pid,id,r);}
+ @DeleteMapping("/products/{pid}/materials/{id}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT) public void deleteMaterial(@PathVariable String pid,@PathVariable String id){service.deleteMaterial(pid,id);}
  @PatchMapping("/products/{pid}/materials/{id}/active") public OptionView activematerials(@PathVariable String pid,@PathVariable String id,@Valid @RequestBody Active r){return service.activematerials(pid,id,r.active());}
  @GetMapping("/products/{pid}/extras") public List<OptionView> extras(@PathVariable String pid){return service.extras(pid);}
  @PostMapping("/products/{pid}/extras") @ResponseStatus(org.springframework.http.HttpStatus.CREATED) public OptionView createextras(@PathVariable String pid,@Valid @RequestBody OptionInput r){return service.saveextras(pid,null,r);}

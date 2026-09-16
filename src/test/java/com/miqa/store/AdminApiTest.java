@@ -139,6 +139,7 @@ class AdminApiTest {
  }
  @Test void authProtectsAllAdminResourcesAndLeavesPublicOpen()throws Exception{
   for(String path:List.of("/products","/categories","/auth/me","/products/banner/images","/products/banner/materials","/products/banner/extras"))json(send("GET","/api/admin"+path,null,null),401);
+  json(send("DELETE","/api/admin/products/banner/materials/banner-13",null,null),401);
   assertThat(call("GET","/auth/me",null,200).get("username").asText()).isEqualTo("admin-test");
   assertThat(call("GET","/auth/me",null,200).has("passwordHash")).isFalse();
   json(send("POST","/api/admin/auth/login",Map.of("username","admin-test","password","wrong"),null),401);
@@ -195,6 +196,43 @@ class AdminApiTest {
    call("PUT","/products/banner/"+kind+"/"+oid,input,404);
    call("PATCH",url+"/"+oid+"/active",Map.of("active",true),200);
   }
+ }
+ @Test void materialCanBeDeletedWithoutDeletingItsProductOrOtherProductsMaterials()throws Exception{
+  String productId=createProduct();
+  var otherProductInput=product("admin-test-other-product","imprenta-papeleria");
+  String otherProductId=call("POST","/products",otherProductInput,201).get("id").asText();
+  String materialId=call("POST","/products/"+productId+"/materials",Map.of("name","PVC 5 mm","active",true,"displayOrder",0),201).get("id").asText();
+  String otherMaterialId=call("POST","/products/"+otherProductId+"/materials",Map.of("name","Acrilico 2 mm","active",true,"displayOrder",0),201).get("id").asText();
+
+  call("DELETE","/products/"+otherProductId+"/materials/"+materialId,null,404);
+  assertThat(jdbc.queryForObject("select count(*) from product_materials where id=?",Integer.class,materialId)).isEqualTo(1);
+  call("DELETE","/products/"+productId+"/materials/missing-material",null,404);
+  call("DELETE","/products/missing-product/materials/"+materialId,null,404);
+
+  call("DELETE","/products/"+productId+"/materials/"+materialId,null,204);
+  assertThat(jdbc.queryForObject("select count(*) from product_materials where id=?",Integer.class,materialId)).isZero();
+  assertThat(jdbc.queryForObject("select count(*) from products where id=?",Integer.class,productId)).isEqualTo(1);
+  assertThat(jdbc.queryForObject("select count(*) from products where id=?",Integer.class,otherProductId)).isEqualTo(1);
+  assertThat(jdbc.queryForObject("select count(*) from product_materials where id=? and product_id=?",Integer.class,otherMaterialId,otherProductId)).isEqualTo(1);
+ }
+ @Test void materialNamesAreTrimmedAndRequireALetterOrNumberOnCreateAndEdit()throws Exception{
+  String productId=createProduct(),url="/products/"+productId+"/materials";
+  for(String invalid:List.of("","   ",".",",","-","_"))
+   call("POST",url,Map.of("name",invalid,"active",true,"displayOrder",0),400);
+  var nullName=new HashMap<String,Object>();nullName.put("name",null);nullName.put("active",true);nullName.put("displayOrder",0);
+  call("POST",url,nullName,400);
+
+  List<String> valid=List.of("Banner Grueso (13 Oz)","PVC 5 mm","Acrílico 2 mm","Vinil + PVC","PVC 3 - 5 MM");
+  String materialId=null;
+  for(int i=0;i<valid.size();i++){
+   var response=call("POST",url,Map.of("name","  "+valid.get(i)+"  ","active",true,"displayOrder",i),201);
+   assertThat(response.get("name").asText()).isEqualTo(valid.get(i));
+   if(materialId==null)materialId=response.get("id").asText();
+  }
+  for(String invalid:List.of("   ",".",",","-","_"))
+   call("PUT",url+"/"+materialId,Map.of("name",invalid,"active",true,"displayOrder",0),400);
+  var edited=call("PUT",url+"/"+materialId,Map.of("name","  PVC 3 - 5 MM editado  ","active",true,"displayOrder",0),200);
+  assertThat(edited.get("name").asText()).isEqualTo("PVC 3 - 5 MM editado");
  }
  @Test void imagesKeepOnlyOnePrimaryAndValidateReferences()throws Exception{
   String id=createProduct(),url="/products/"+id+"/images";var input=new HashMap<String,Object>(Map.of("url","products/test.webp","altText","Test image","primaryImage",true,"displayOrder",0));

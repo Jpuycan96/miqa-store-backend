@@ -1,5 +1,13 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Eliminación administrativa de materiales — 16 de septiembre de 2026
+
+- `product_materials` es una tabla de opciones pertenecientes a un único producto mediante `product_id NOT NULL`; no es un catálogo global y ninguna otra tabla la referencia. Se añadió `DELETE /api/admin/products/{productId}/materials/{materialId}` con la autenticación Bearer administrativa existente. Comprueba primero el producto, exige que el material pertenezca a ese producto, elimina físicamente solo esa fila y devuelve 204. Producto/material inexistente o asociación incorrecta devuelven el 404 administrativo existente.
+- La eliminación es física porque el material no tiene referencias ni historial dependiente y el objetivo es retirar opciones erróneas; la baja reversible mediante `active` se conserva. No se modificó ningún dato existente, incluido el registro `"."`, ni se creó migración Flyway.
+- Creación y edición de materiales normalizan el nombre con `trim`, rechazan null/vacío/solo espacios mediante Bean Validation y ahora exigen al menos una letra o número Unicode. Nombres únicamente de puntuación como `.`, `,`, `-` y `_` devuelven 400; se admiten nombres comerciales con paréntesis, medidas, acentos, `+` y guiones.
+- Se agregaron pruebas HTTP para autenticación, 204, producto/material inexistentes, ownership, permanencia de productos/materiales ajenos y validación/normalización de nombres. No se ejecutaron porque el perfil test fija `127.0.0.1:55432/miqa_store_test_db`, pero ese PostgreSQL no estaba escuchando y no había credenciales TEST cargadas; nunca se sustituyó por `miqa_store_db` ni por el túnel de producción.
+- Java 21 y `mvn -DskipTests package` correctos, incluyendo compilación de fuentes y tests; JAR generado. El `mvnw.cmd` local falló antes de iniciar Maven por un problema del script wrapper al evaluar `.m2`, por lo que se usó la distribución Maven 3.9.9 ya descargada por el mismo wrapper. `git diff --check` correcto. Sin commit, push ni deploy.
+
 ## Cabeceras de categoría administrables — 15 de septiembre de 2026
 
 - V5 agrega `catalog_headline` (200) y `catalog_description` (500) opcionales a `categories`, con restricciones de texto plano, e inicializa las seis categorías por slug. La entidad y los DTO públicos/admin exponen `catalogHeadline` y `catalogDescription`; el guardado administrativo normaliza espacios y valores vacíos a null.
