@@ -1,5 +1,12 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Preflight CORS para DELETE administrativo — 16 de septiembre de 2026
+
+- La configuración CORS administrativa omitía `DELETE` de `allowedMethods`; por ello Spring rechazaba con 403 el preflight antes de que el DELETE autenticado alcanzara el controller. Se añadió únicamente `DELETE` a los métodos permitidos de `/api/admin/**`, reutilizando los origins explícitos existentes y conservando headers, credenciales y tiempo de caché.
+- Spring Security mantiene CORS habilitado y `/api/admin/**` autenticado. Los preflight válidos se resuelven por el filtro CORS sin Bearer; el DELETE real continúa requiriendo JWT. No se abrió ningún origin ni endpoint, y no se cambió CSRF, datasource, Flyway o producción.
+- El test HTTP CORS administrativo cubre preflight DELETE/POST/PUT desde el origin configurado, headers `Access-Control-Allow-Origin` y `Access-Control-Allow-Methods`, rechazo de origin ajeno y DELETE real sin autenticación.
+- Validación local con Java 21: `ProductionConfigurationTest` aprobó 7/7 pruebas sin base y `mvn -DskipTests package` terminó en BUILD SUCCESS, compilando también los tests. La prueba HTTP y la suite completa no se ejecutaron: su URL está fijada a `127.0.0.1:55432/miqa_store_test_db`, pero el puerto no escuchaba y no había credenciales TEST cargadas; no se usó producción. `git diff --check` correcto. Sin commit, push ni deploy.
+
 ## Eliminación administrativa de materiales — 16 de septiembre de 2026
 
 - `product_materials` es una tabla de opciones pertenecientes a un único producto mediante `product_id NOT NULL`; no es un catálogo global y ninguna otra tabla la referencia. Se añadió `DELETE /api/admin/products/{productId}/materials/{materialId}` con la autenticación Bearer administrativa existente. Comprueba primero el producto, exige que el material pertenezca a ese producto, elimina físicamente solo esa fila y devuelve 204. Producto/material inexistente o asociación incorrecta devuelven el 404 administrativo existente.

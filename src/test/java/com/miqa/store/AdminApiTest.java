@@ -248,11 +248,20 @@ class AdminApiTest {
   for(int i=0;i<5;i++)json(send("POST","/api/admin/auth/login",Map.of("username","rate-limit-test","password","wrong"),null),401);
   json(send("POST","/api/admin/auth/login",Map.of("username","rate-limit-test","password","wrong"),null),429);
  }
- @Test void adminCorsAllowsAuthorizationOnlyForLocalOrigin()throws Exception{
-  for(String origin:List.of("http://localhost:4200","https://outside.example")){
-   var req=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/admin/products")).header("Origin",origin).header("Access-Control-Request-Method","POST").header("Access-Control-Request-Headers","authorization,content-type").method("OPTIONS",HttpRequest.BodyPublishers.noBody()).build();
-   var r=client.send(req,HttpResponse.BodyHandlers.ofString());assertThat(r.statusCode()).isEqualTo(origin.startsWith("http://localhost")?200:403);
-   if(r.statusCode()==200)assertThat(r.headers().firstValue("Access-Control-Allow-Headers").orElse("").toLowerCase()).contains("authorization");
+ @Test void adminCorsAllowsDeletePostAndPutOnlyForConfiguredOrigin()throws Exception{
+  String allowedOrigin="http://localhost:4200",path="/api/admin/products/banner/materials/banner-13";
+  for(String method:List.of("DELETE","POST","PUT")){
+   var req=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+path)).header("Origin",allowedOrigin).header("Access-Control-Request-Method",method).header("Access-Control-Request-Headers","authorization,content-type").method("OPTIONS",HttpRequest.BodyPublishers.noBody()).build();
+   var response=client.send(req,HttpResponse.BodyHandlers.ofString());
+   assertThat(response.statusCode()).isEqualTo(200);
+   assertThat(response.headers().firstValue("Access-Control-Allow-Origin")).contains(allowedOrigin);
+   assertThat(response.headers().firstValue("Access-Control-Allow-Methods").orElse("")).contains(method);
+   assertThat(response.headers().firstValue("Access-Control-Allow-Headers").orElse("").toLowerCase()).contains("authorization");
   }
+  var rejected=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+path)).header("Origin","https://outside.example").header("Access-Control-Request-Method","DELETE").header("Access-Control-Request-Headers","authorization").method("OPTIONS",HttpRequest.BodyPublishers.noBody()).build();
+  var response=client.send(rejected,HttpResponse.BodyHandlers.ofString());
+  assertThat(response.statusCode()).isEqualTo(403);
+  assertThat(response.headers().firstValue("Access-Control-Allow-Origin")).isEmpty();
+  json(send("DELETE",path,null,null),401);
  }
 }
