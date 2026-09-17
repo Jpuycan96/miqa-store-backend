@@ -52,6 +52,7 @@ Todos los endpoints /api/admin/** requieren Bearer salvo POST /api/admin/auth/lo
 
 - POST /api/admin/auth/login → {token, expiresAt}; GET /api/admin/auth/me → {id, username}.
 - GET/POST /api/admin/categories; GET/PUT /api/admin/categories/{id}; PATCH /{id}/active con {active}.
+- DELETE /api/admin/categories/{id} elimina solo categorías sin productos; los slugs de categoría se generan exclusivamente desde el nombre y no forman parte del input.
 - GET/POST /api/admin/products; GET/PUT /api/admin/products/{id}; PATCH /{id}/published con {published}; PATCH /{id}/featured con {featured}.
 - Listado admin de productos admite search, category (ID de categoría), published y featured combinados, orden displayOrder/id. La API pública conserva category como SLUG. Sin paginación en esta etapa.
 - GET/POST /api/admin/products/{pid}/materials y /extras; PUT /{optionId}; PATCH /{optionId}/active con {active}.
@@ -197,6 +198,7 @@ Los tests levantan la API en puerto aleatorio y hacen peticiones HTTP reales con
 ## Endpoints y contrato
 
 - `GET /api/public/categories`: categorías activas por displayOrder/id.
+- `GET /api/public/category-slug-redirects`: aliases históricos de categorías activas y su slug actual, para generar redirecciones HTTP permanentes durante el build frontend.
 - `GET /api/public/products`: productos publicados de categorías activas, por displayOrder/id. Filtros opcionales combinables: `category` (slug), `search` (nombre, sin distinguir mayúsculas; acentos significativos), `featured=true|false`. `%` y `_` se buscan literalmente. Sin paginación en esta primera etapa.
 - `GET /api/public/products/{slug}`: producto publicado con categoría, imágenes, materiales/extras activos y ordenados. Desconocidos u ocultos devuelven 404.
 

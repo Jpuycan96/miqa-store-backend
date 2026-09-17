@@ -13,6 +13,8 @@ public class CatalogController {
     public CatalogController(CatalogService catalog) { this.catalog = catalog; }
     @GetMapping("/categories")
     public List<CategoryDto> categories() { return catalog.categories(); }
+    @GetMapping("/category-slug-redirects")
+    public List<CategorySlugRedirectDto> categorySlugRedirects() { return catalog.categorySlugRedirects(); }
     @GetMapping("/products")
     public List<ProductDto> products(
             @RequestParam(required = false) @Size(max = 160) @Pattern(regexp = "[a-z0-9-]*") String category,

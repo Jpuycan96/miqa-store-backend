@@ -1,5 +1,20 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Corrección de eliminación de categorías y contexto JPA — 17 de septiembre de 2026
+
+- El DELETE de una categoría vacía podía fallar al crear el tombstone de su slug y desvincularlo mediante un bulk UPDATE en la misma transacción. El UPDATE modificaba PostgreSQL, pero dejaba el `CategorySlugAlias` administrado apuntando en memoria a la categoría que se eliminaba; el flush posterior de Hibernate detectaba esa referencia obsoleta y Spring la traducía a `InvalidDataAccessApiUsageException`.
+- `CategorySlugAliasRepository.detachCategory` conserva su JPQL y parámetros, y ahora usa `@Modifying(flushAutomatically = true, clearAutomatically = true)` para limpiar el persistence context después del bulk UPDATE. No se cambió Hero, Flyway ni datos manualmente.
+- Se añadió cobertura HTTP/PostgreSQL específica para eliminar una categoría vacía nunca renombrada, obligando a crear y desvincular el tombstone en la misma transacción. La prueba Mockito anterior solo verificaba invocaciones y no ejecutaba Hibernate, el bulk UPDATE ni un flush real.
+- Validación de esta sesión: `AdminCatalogServiceDeletionTest` aprobó 2/2 pruebas. La prueba HTTP/PostgreSQL específica no pudo iniciar porque `miqa_store_test_db` no escuchaba en `127.0.0.1:55432`; no se redirigió a DEV. DEV no se declaró funcional y debe repetirse el DELETE después de reiniciar el backend con este código.
+
+## Categorías públicas dinámicas e historial SEO — 17 de septiembre de 2026
+
+- `categories.active` se reutiliza como publicación/indexabilidad; no se agregó un estado redundante. La API pública devuelve únicamente activas y sus productos publicados. Admin conserva crear, editar y activar/desactivar, y suma eliminación de categorías vacías.
+- El backend es autoridad exclusiva del slug de categoría. `CategorySlug.fromName` normaliza minúsculas, tildes/diacríticos y ñ, agrupa separadores como un guion y recorta extremos. `CategoryInput` ya no acepta slug. Crear siempre calcula el slug; editar solo lo recalcula si el nombre almacenado cambia. Guardar contenido editorial/estado con el mismo nombre conserva slugs legacy aunque difieran de la normalización actual. Un resultado igual no crea historial y cualquier colisión devuelve 409 sin sufijos automáticos.
+- V6 crea `category_slug_aliases`: al cambiar slug guarda el anterior ligado a la categoría; al eliminar una categoría vacía conserva aliases y slug actual como tombstones con `category_id NULL`. Los slugs actuales de categorías/productos y aliases históricos se validan de forma cruzada en escrituras administrativas. Una categoría con productos no puede eliminarse.
+- `GET /api/public/category-slug-redirects` devuelve `oldSlug -> currentSlug` solo para categorías activas. El frontend usa este contrato durante build para generar reglas 301 de Cloudflare; la API no pretende que una navegación JavaScript sea una redirección HTTP.
+- Validación disponible sin DB: compilación Java 21 correcta y 9/9 tests de normalización/configuración. La suite completa compiló 54 tests pero no pudo ejecutarse porque el PostgreSQL aislado de tests no escuchaba en 127.0.0.1:55432 y no se encontraron binarios locales para iniciarlo; no se usó DEV ni producción.
+
 ## Preflight CORS para DELETE administrativo — 16 de septiembre de 2026
 
 - La configuración CORS administrativa omitía `DELETE` de `allowedMethods`; por ello Spring rechazaba con 403 el preflight antes de que el DELETE autenticado alcanzara el controller. Se añadió únicamente `DELETE` a los métodos permitidos de `/api/admin/**`, reutilizando los origins explícitos existentes y conservando headers, credenciales y tiempo de caché.

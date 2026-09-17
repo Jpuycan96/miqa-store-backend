@@ -13,6 +13,7 @@ public class AdminCatalogController {
  @PostMapping("/categories") @ResponseStatus(org.springframework.http.HttpStatus.CREATED) public CategoryView createCategory(@Valid @RequestBody CategoryInput r){return service.saveCategory(null,r);}
  @PutMapping("/categories/{id}") public CategoryView category(@PathVariable String id,@Valid @RequestBody CategoryInput r){return service.saveCategory(id,r);}
  @PatchMapping("/categories/{id}/active") public CategoryView active(@PathVariable String id,@Valid @RequestBody Active r){return service.activeCategory(id,r.active());}
+ @DeleteMapping("/categories/{id}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT) public void deleteCategory(@PathVariable String id){service.deleteCategory(id);}
  @GetMapping("/products") public List<ProductView> products(@RequestParam(required=false) @Size(max=64) String category,@RequestParam(required=false) @Size(max=120) String search,@RequestParam(required=false) Boolean published,@RequestParam(required=false) Boolean featured){return service.products(category,search,published,featured);}
  @GetMapping("/products/{id}") public ProductView product(@PathVariable String id){return service.product(id);}
  @PostMapping("/products") @ResponseStatus(org.springframework.http.HttpStatus.CREATED) public ProductView createProduct(@Valid @RequestBody ProductInput r){return service.saveProduct(null,r);}

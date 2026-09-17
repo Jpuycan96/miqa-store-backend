@@ -65,6 +65,7 @@ class CatalogApiTest {
                 "Tarjetas, volantes, dípticos, calendarios y papelería corporativa.",
                 "Señalización personalizada para empresas y espacios.",
                 "Diseño, producción e instalación en un solo lugar.");
+        assertThat(jdbc.queryForObject("select count(*) from category_slug_aliases", Integer.class)).isZero();
     }
     @Test void healthIsAggregateOnlyAndSensitiveActuatorEndpointsAreNotPublic() throws Exception {
         assertThat(json("/actuator/health").toString()).isEqualTo("{\"status\":\"UP\"}");
@@ -145,7 +146,7 @@ class CatalogApiTest {
         }
     }
     @Test void flywayAppliedMigrationsAndConstraintsAreEnforced() {
-        assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success", Integer.class)).isEqualTo(5);
+        assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success", Integer.class)).isEqualTo(6);
         assertThatThrownBy(() -> jdbc.update("update products set pack_size=null where id='tarjetas-personales'")).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("delete from categories where id='imprenta-papeleria'")).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("insert into product_images(id,product_id,url,alt_text,primary_image) values ('duplicate-primary','banner','/x.png','x',true)")).isInstanceOf(DataIntegrityViolationException.class);

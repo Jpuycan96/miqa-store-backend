@@ -6,6 +6,7 @@ public final class CatalogDtos {
     private CatalogDtos() {}
     public record CategoryDto(String id, String name, String slug, String description,
             String catalogHeadline, String catalogDescription, int displayOrder) {}
+    public record CategorySlugRedirectDto(String oldSlug, String currentSlug) {}
     public record OptionDto(String id, String name) {}
     public record ImageDto(String id, String url, String altText, boolean primaryImage, int displayOrder) {}
     public record ProductDto(String id, String slug, String name, String shortDescription, String description,

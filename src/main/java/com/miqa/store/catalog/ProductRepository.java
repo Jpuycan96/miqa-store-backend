@@ -7,4 +7,6 @@ import java.util.Optional;
 public interface ProductRepository extends JpaRepository<Product, String>, JpaSpecificationExecutor<Product> {
     Optional<Product> findBySlugAndPublishedTrueAndCategoryActiveTrue(String slug);
     boolean existsBySlugAndIdNot(String slug, String id);
+    boolean existsBySlug(String slug);
+    boolean existsByCategoryId(String categoryId);
 }

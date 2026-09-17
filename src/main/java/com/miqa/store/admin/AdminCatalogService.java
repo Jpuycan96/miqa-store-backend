@@ -10,8 +10,8 @@ import org.springframework.data.jpa.domain.Specification;
 import java.util.*;
 @Service @Transactional(readOnly=true)
 public class AdminCatalogService {
- private final CategoryRepository categories;private final ProductRepository products;private final EntityManager em;private final MediaProperties media;private final ProductImageStorage storage;
- public AdminCatalogService(CategoryRepository categories,ProductRepository products,EntityManager em,MediaProperties media,ProductImageStorage storage){this.categories=categories;this.products=products;this.em=em;this.media=media;this.storage=storage;}
+ private final CategoryRepository categories;private final CategorySlugAliasRepository categoryAliases;private final ProductRepository products;private final EntityManager em;private final MediaProperties media;private final ProductImageStorage storage;
+ public AdminCatalogService(CategoryRepository categories,CategorySlugAliasRepository categoryAliases,ProductRepository products,EntityManager em,MediaProperties media,ProductImageStorage storage){this.categories=categories;this.categoryAliases=categoryAliases;this.products=products;this.em=em;this.media=media;this.storage=storage;}
  private String id(){return UUID.randomUUID().toString();}
  private AdminFailure missing(){return new AdminFailure(404,"Recurso no disponible");}
  private Product entity(String id){return products.findById(id).orElseThrow(this::missing);}
@@ -21,12 +21,25 @@ public class AdminCatalogService {
  public List<CategoryView> categories(){return categories.findAll(Sort.by("displayOrder","id")).stream().map(this::categoryView).toList();}
  @Transactional public CategoryView saveCategory(String id,CategoryInput r){
   Category c=id==null?new Category():categoryEntity(id);if(id==null)c.setId(id());
-  if(categories.existsBySlugAndIdNot(r.slug(),c.getId()))throw new AdminFailure(409,"El slug de categoria ya existe");
-  c.setName(r.name().trim());c.setSlug(r.slug());c.setDescription(r.description());c.setCatalogHeadline(clean(r.catalogHeadline()));c.setCatalogDescription(clean(r.catalogDescription()));c.setActive(r.active());c.setDisplayOrder(r.displayOrder());
+  String name=r.name().trim();String slug;
+  try{slug=id==null?CategorySlug.fromName(name):CategorySlug.forUpdate(c.getName(),c.getSlug(),name);}catch(IllegalArgumentException ex){throw new AdminFailure(400,ex.getMessage());}
+  if(!Objects.equals(slug,c.getSlug())){
+   if(categories.existsBySlugAndIdNot(slug,c.getId())||products.existsBySlug(slug)||categoryAliases.existsById(slug))
+    throw new AdminFailure(409,"Ya existe una URL de producto, categoria o alias historico con el slug '"+slug+"'");
+   if(c.getSlug()!=null)categoryAliases.save(new CategorySlugAlias(c.getSlug(),c));
+  }
+  c.setName(name);c.setSlug(slug);c.setDescription(r.description());c.setCatalogHeadline(clean(r.catalogHeadline()));c.setCatalogDescription(clean(r.catalogDescription()));c.setActive(r.active());c.setDisplayOrder(r.displayOrder());
   if(id==null)em.persist(c);em.flush();return categoryView(c);
  }
  private String clean(String value){if(value==null)return null;String cleaned=value.trim();return cleaned.isEmpty()?null:cleaned;}
  @Transactional public CategoryView activeCategory(String id,boolean active){var c=categoryEntity(id);c.setActive(active);return categoryView(c);}
+ @Transactional public void deleteCategory(String id){
+  var c=categoryEntity(id);
+  if(products.existsByCategoryId(id))throw new AdminFailure(409,"No se puede eliminar la categoria porque tiene productos asociados");
+  if(!categoryAliases.existsById(c.getSlug()))categoryAliases.saveAndFlush(new CategorySlugAlias(c.getSlug(),c));
+  categoryAliases.detachCategory(id);
+  categories.delete(c);categories.flush();
+ }
  public ProductView product(String id){return view(entity(id));}
  public List<ProductView> products(String category,String search,Boolean published,Boolean featured){
   Specification<Product> spec=(root,q,cb)->cb.conjunction();
@@ -47,6 +60,7 @@ public class AdminCatalogService {
   else if(r.packSize()!=null||r.packLabel()!=null)throw new AdminFailure(400,"QUANTITY y AREA requieren packSize y packLabel null");
   var p=id==null?new Product():entity(id);if(id==null)p.setId(id());
   if(products.existsBySlugAndIdNot(r.slug(),p.getId()))throw new AdminFailure(409,"El slug de producto ya existe");
+  if(categories.existsBySlug(r.slug())||categoryAliases.existsById(r.slug()))throw new AdminFailure(409,"Ya existe una URL de categoria o alias historico con ese slug de producto");
   p.setCategory(categoryEntity(r.categoryId()));
   p.setName(r.name());
   p.setSlug(r.slug());

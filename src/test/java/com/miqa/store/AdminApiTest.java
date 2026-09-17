@@ -34,7 +34,7 @@ class AdminApiTest {
   cleanup();var user=users.saveAndFlush(new AdminUser("admin-test",passwords.encode("Test-only-password-2026")));userId=user.getId();
   token=json(send("POST","/api/admin/auth/login",Map.of("username","admin-test","password","Test-only-password-2026"),null),200).get("token").asText();
  }
- @AfterEach void cleanup(){jdbc.update("delete from products where slug like 'admin-test-%'");jdbc.update("delete from categories where slug like 'admin-test-%'");jdbc.update("delete from admin_users where username='admin-test'");}
+ @AfterEach void cleanup(){jdbc.update("delete from products where slug like 'admin-test-%'");jdbc.update("delete from categories where slug like 'admin-test-%' or slug like 'categoria-editada-%'");jdbc.update("delete from category_slug_aliases where slug like 'admin-test-%' or slug like 'categoria-editada-%'");jdbc.update("delete from admin_users where username='admin-test'");}
  private HttpResponse<String> send(String method,String path,Object body,String bearer) throws Exception {
   var r=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+path)).timeout(Duration.ofSeconds(15));
   if(bearer!=null)r.header("Authorization","Bearer "+bearer);
@@ -43,7 +43,7 @@ class AdminApiTest {
  }
  private JsonNode json(HttpResponse<String> r,int status){assertThat(r.statusCode()).withFailMessage("Expected %s, got %s: %s",status,r.statusCode(),r.body()).isEqualTo(status);return mapper.readTree(r.body());}
  private JsonNode call(String method,String path,Object body,int status)throws Exception{return json(send(method,"/api/admin"+path,body,token),status);}
- private Map<String,Object> category(String slug){var category=new HashMap<String,Object>();category.put("name","Admin test category");category.put("slug",slug);category.put("description","Local test");category.put("catalogHeadline","  Make it visible.  ");category.put("catalogDescription","  Commercial description.  ");category.put("active",true);category.put("displayOrder",50);return category;}
+ private Map<String,Object> category(String name){var category=new HashMap<String,Object>();category.put("name",name);category.put("description","Local test");category.put("catalogHeadline","  Make it visible.  ");category.put("catalogDescription","  Commercial description.  ");category.put("active",true);category.put("displayOrder",50);return category;}
  private Map<String,Object> product(String slug,String category){var p=new HashMap<String,Object>();p.put("name","Admin test product");p.put("slug",slug);p.put("categoryId",category);p.put("shortDescription","Test");p.put("description","Test detail");p.put("saleType","QUANTITY");p.put("unitLabel","unidad");p.put("minQuantity",1);p.put("quantityStep",1);p.put("published",false);p.put("featured",false);p.put("displayOrder",50);return p;}
  private String createProduct() throws Exception{return call("POST","/products",product("admin-test-product","imprenta-papeleria"),201).get("id").asText();}
  private byte[] imageBytes(String format)throws Exception{
@@ -156,16 +156,57 @@ class AdminApiTest {
   json(send("GET","/api/admin/auth/me",null,token),401);
   json(send("POST","/api/admin/auth/login",Map.of("username","admin-test","password","Test-only-password-2026"),null),401);
  }
- @Test void categoryLifecycleAndDuplicateSlug()throws Exception{
- var input=category("admin-test-category");String id=call("POST","/categories",input,201).get("id").asText();
+ @Test void categoryLifecycleGeneratesSlugAndKeepsHistory()throws Exception{
+ var input=category("Admin   test -- category!!!");String id=call("POST","/categories",input,201).get("id").asText();
   assertThat(call("GET","/categories",null,200).size()).isEqualTo(7);
-  var created=call("GET","/categories/"+id,null,200);assertThat(created.get("catalogHeadline").asText()).isEqualTo("Make it visible.");assertThat(created.get("catalogDescription").asText()).isEqualTo("Commercial description.");input.put("name","Edited category");input.put("catalogHeadline","Updated headline");input.put("catalogDescription","Updated description");
-  var updated=call("PUT","/categories/"+id,input,200);assertThat(updated.get("name").asText()).isEqualTo("Edited category");assertThat(updated.get("catalogHeadline").asText()).isEqualTo("Updated headline");assertThat(updated.get("catalogDescription").asText()).isEqualTo("Updated description");
-  call("POST","/categories",input,409);input.put("slug","INVALID");call("POST","/categories",input,400);
-  input.put("slug","admin-test-invalid-html");input.put("catalogHeadline","<b>Unsafe</b>");call("POST","/categories",input,400);
+  var created=call("GET","/categories/"+id,null,200);assertThat(created.get("slug").asText()).isEqualTo("admin-test-category");assertThat(created.get("catalogHeadline").asText()).isEqualTo("Make it visible.");assertThat(created.get("catalogDescription").asText()).isEqualTo("Commercial description.");
+  input.put("name","Categoría editada Ñandú");input.put("catalogHeadline","Updated headline");input.put("catalogDescription","Updated description");
+  var updated=call("PUT","/categories/"+id,input,200);assertThat(updated.get("slug").asText()).isEqualTo("categoria-editada-nandu");assertThat(updated.get("catalogHeadline").asText()).isEqualTo("Updated headline");assertThat(updated.get("catalogDescription").asText()).isEqualTo("Updated description");
+  var redirects=json(send("GET","/api/public/category-slug-redirects",null,null),200);assertThat(redirects.toString()).contains("admin-test-category","categoria-editada-nandu");
+  input.put("name","  CATEGORÍA editada ñandú  ");call("PUT","/categories/"+id,input,200);assertThat(jdbc.queryForObject("select count(*) from category_slug_aliases where category_id=?",Integer.class,id)).isEqualTo(1);
+  call("POST","/categories",input,409);input.put("name","!!!");call("POST","/categories",input,400);
+  input.put("name","Admin test invalid html");input.put("catalogHeadline","<b>Unsafe</b>");call("POST","/categories",input,400);
   input.put("catalogHeadline","a".repeat(201));call("POST","/categories",input,400);
   assertThat(call("PATCH","/categories/"+id+"/active",Map.of("active",false),200).get("active").asBoolean()).isFalse();
-  call("DELETE","/categories/"+id,null,405);
+  call("DELETE","/categories/"+id,null,204);assertThat(jdbc.queryForObject("select count(*) from category_slug_aliases where slug='categoria-editada-nandu' and category_id is null",Integer.class)).isEqualTo(1);
+ }
+ @Test void editingEditorialFieldsWithUnchangedNamePreservesLegacySlug()throws Exception{
+  var transaction=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+  transaction.executeWithoutResult(status->{
+   var before=catalogService.category("imprenta-papeleria");
+   assertThat(before.name()).isEqualTo("Imprenta y Papelería");assertThat(before.slug()).isEqualTo("imprenta-papeleria");
+   var input=new AdminDtos.CategoryInput(before.name(),before.description(),"Headline actualizada","Descripción actualizada",before.active(),before.displayOrder());
+   var updated=catalogService.saveCategory(before.id(),input);
+   assertThat(updated.slug()).isEqualTo("imprenta-papeleria");
+   assertThat(jdbc.queryForObject("select count(*) from category_slug_aliases where slug='imprenta-papeleria'",Integer.class)).isZero();
+   catalogService.activeCategory(before.id(),!before.active());
+   assertThat(catalogService.category(before.id()).slug()).isEqualTo("imprenta-papeleria");
+   status.setRollbackOnly();
+  });
+ }
+ @Test void categoryAndProductSlugsCannotCollideWithCurrentOrHistoricalUrls()throws Exception{
+  String productId=createProduct();assertThat(productId).isNotBlank();
+  call("POST","/categories",category("Admin test product"),409);
+  var input=category("Admin test category");String categoryId=call("POST","/categories",input,201).get("id").asText();
+  var productInput=product("admin-test-category","imprenta-papeleria");call("POST","/products",productInput,409);
+  input.put("name","Admin test renamed");call("PUT","/categories/"+categoryId,input,200);
+  productInput.put("slug","admin-test-category");call("POST","/products",productInput,409);
+ }
+ @Test void categoryDeletionIsBlockedWithProductsAndAllowedWithoutThem()throws Exception{
+  String occupiedId=call("POST","/categories",category("Admin test occupied"),201).get("id").asText();
+  call("POST","/products",product("admin-test-associated",occupiedId),201);
+  call("DELETE","/categories/"+occupiedId,null,409);
+  String emptyId=call("POST","/categories",category("Admin test empty"),201).get("id").asText();
+  var renamed=category("Admin test empty renamed");call("PUT","/categories/"+emptyId,renamed,200);
+  call("DELETE","/categories/"+emptyId,null,204);
+  assertThat(jdbc.queryForObject("select count(*) from categories where id=?",Integer.class,emptyId)).isZero();
+  assertThat(jdbc.queryForObject("select count(*) from category_slug_aliases where slug in ('admin-test-empty','admin-test-empty-renamed') and category_id is null",Integer.class)).isEqualTo(2);
+ }
+ @Test void deletingNeverRenamedEmptyCategoryDetachesNewTombstoneBeforeEntityFlush()throws Exception{
+  String id=call("POST","/categories",category("Admin test delete direct"),201).get("id").asText();
+  call("DELETE","/categories/"+id,null,204);
+  assertThat(jdbc.queryForObject("select count(*) from categories where id=?",Integer.class,id)).isZero();
+  assertThat(jdbc.queryForObject("select count(*) from category_slug_aliases where slug='admin-test-delete-direct' and category_id is null",Integer.class)).isEqualTo(1);
  }
  @Test void productLifecycleVisibilityFiltersAndSeo()throws Exception{
   String id=createProduct();String url="/products/"+id;

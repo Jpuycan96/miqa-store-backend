@@ -6,4 +6,5 @@ import java.util.List;
 public interface CategoryRepository extends JpaRepository<Category, String> {
     List<Category> findByActiveTrueOrderByDisplayOrderAscIdAsc();
     boolean existsBySlugAndIdNot(String slug, String id);
+    boolean existsBySlug(String slug);
 }

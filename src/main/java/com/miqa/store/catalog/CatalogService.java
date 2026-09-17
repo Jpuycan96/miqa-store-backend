@@ -14,15 +14,21 @@ import java.util.Locale;
 @Transactional(readOnly = true)
 public class CatalogService {
     private final CategoryRepository categories;
+    private final CategorySlugAliasRepository categoryAliases;
     private final ProductRepository products;
     private final MediaProperties media;
-    public CatalogService(CategoryRepository categories, ProductRepository products, MediaProperties media) {
+    public CatalogService(CategoryRepository categories, CategorySlugAliasRepository categoryAliases, ProductRepository products, MediaProperties media) {
         this.categories = categories;
+        this.categoryAliases = categoryAliases;
         this.products = products;
         this.media = media;
     }
     public List<CategoryDto> categories() {
         return categories.findByActiveTrueOrderByDisplayOrderAscIdAsc().stream().map(this::categoryDto).toList();
+    }
+    public List<CategorySlugRedirectDto> categorySlugRedirects() {
+        return categoryAliases.findPublicRedirects().stream()
+                .map(alias -> new CategorySlugRedirectDto(alias.getSlug(), alias.getCategory().getSlug())).toList();
     }
     public List<ProductDto> products(String category, String search, Boolean featured) {
         Specification<Product> specification = (root, query, cb) -> cb.and(
