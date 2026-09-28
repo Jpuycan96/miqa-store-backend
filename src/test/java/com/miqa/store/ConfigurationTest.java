@@ -11,6 +11,20 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.*;
 
 class ConfigurationTest {
+    @Test void testProfileRejectsEveryDatabaseExceptIsolatedTestDatabaseBeforeStartup() {
+        for (String database : new String[]{"miqa_store_db", "miqa_store_dev_db", "gigantografias_db", "miqa_store_test_db?currentSchema=public"}) {
+            var environment = new MockEnvironment().withProperty("spring.datasource.url", "jdbc:postgresql://127.0.0.1:55432/" + database)
+                    .withProperty("spring.datasource.username", "miqa_store_local");
+            environment.setActiveProfiles("test");
+            assertThatThrownBy(() -> new LocalDatabaseGuard().postProcessEnvironment(environment, new SpringApplication())).isInstanceOf(IllegalStateException.class);
+        }
+        var test = new MockEnvironment().withProperty("spring.datasource.url", "jdbc:postgresql://127.0.0.1:55432/miqa_store_test_db")
+                .withProperty("spring.datasource.username", "miqa_store_local");
+        test.setActiveProfiles("test");
+        assertThatCode(() -> new LocalDatabaseGuard().postProcessEnvironment(test, new SpringApplication())).doesNotThrowAnyException();
+        test.setActiveProfiles("test", "local");
+        assertThatThrownBy(() -> new LocalDatabaseGuard().postProcessEnvironment(test, new SpringApplication())).isInstanceOf(IllegalStateException.class);
+    }
     @Test void mediaReferencesAreIndependentOfFrontendAndDomain() {
         var media = new MediaProperties();
         media.setStoragePath(Path.of(".local", "media"));

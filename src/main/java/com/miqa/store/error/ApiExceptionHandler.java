@@ -34,7 +34,17 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(ex.status()).body(new ApiError(Instant.now(),ex.status(),code,ex.getMessage(),request.getRequestURI(),Map.of()));
     }
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
-    public ResponseEntity<ApiError> conflict(Exception ex,HttpServletRequest request){return ResponseEntity.status(409).body(new ApiError(Instant.now(),409,"CONFLICT","Ya existe un registro con ese slug o nombre; revisa los datos",request.getRequestURI(),Map.of()));}
+    public ResponseEntity<ApiError> conflict(Exception ex,HttpServletRequest request){
+        String message = com.miqa.store.quote.QuoteRequestBodyFilter.matches(request)
+                ? "No se pudo guardar la solicitud por un conflicto de datos"
+                : "Ya existe un registro con ese slug o nombre; revisa los datos";
+        return ResponseEntity.status(409).body(new ApiError(Instant.now(),409,"CONFLICT",message,request.getRequestURI(),Map.of()));
+    }
+    @ExceptionHandler(com.miqa.store.quote.QuoteRequestFailure.class)
+    public ResponseEntity<ApiError> quoteRequest(com.miqa.store.quote.QuoteRequestFailure ex,HttpServletRequest request){
+        return ResponseEntity.status(ex.status()).header("Cache-Control","no-store").body(new ApiError(Instant.now(),
+                ex.status(),ex.status()==409?"CONFLICT":"INVALID_REQUEST",ex.getMessage(),request.getRequestURI(),Map.of()));
+    }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> unexpected(Exception exception, HttpServletRequest request) {
         // Exception messages/causes may contain SQL values or authentication input.
@@ -44,6 +54,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     private ApiError error(int status, String path) {
         String code = switch (status) { case 400 -> "INVALID_REQUEST"; case 404 -> "NOT_FOUND"; case 413 -> "PAYLOAD_TOO_LARGE"; case 405 -> "METHOD_NOT_ALLOWED"; default -> status >= 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR"; };
         String message = switch (status) { case 413 -> "La imagen no debe superar 5 MB"; case 400 -> "Parámetros de solicitud inválidos"; case 404 -> "Recurso no disponible"; case 405 -> "Método no permitido"; default -> status >= 500 ? "No se pudo completar la solicitud" : "Solicitud no permitida"; };
+        if (status == 413 && com.miqa.store.quote.QuoteRequestBodyFilter.PATH.equals(path)) message = "La solicitud no debe superar 64 KiB";
         return new ApiError(Instant.now(), status, code, message, path,
                 status == 400 ? Map.of("request", "Revisa formato y longitud de los parámetros") : Map.of());
     }

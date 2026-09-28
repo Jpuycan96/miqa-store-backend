@@ -34,9 +34,13 @@ public class AdminSecurity {
   return decoder;
  }
  @Bean @org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
- SecurityFilterChain security(HttpSecurity http,ObjectMapper mapper) throws Exception {
+ SecurityFilterChain security(HttpSecurity http,ObjectMapper mapper,com.miqa.store.quote.QuoteRequestRateLimit quoteLimit) throws Exception {
   // Header-only bearer tokens; no cookie authentication or server session.
   return http.csrf(csrf->csrf.disable()).cors(cors->{})
+   .headers(h->h.addHeaderWriter((request,response)->{
+    if(com.miqa.store.quote.QuoteRequestBodyFilter.matches(request)) response.setHeader("Cache-Control","no-store");
+   }))
+   .addFilterAfter(new com.miqa.store.quote.QuoteRequestBodyFilter(mapper,quoteLimit),org.springframework.web.filter.CorsFilter.class)
    .sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
    .authorizeHttpRequests(a->a.requestMatchers(HttpMethod.POST,"/api/admin/auth/login").permitAll()
     .requestMatchers(HttpMethod.GET,"/actuator/health").permitAll()

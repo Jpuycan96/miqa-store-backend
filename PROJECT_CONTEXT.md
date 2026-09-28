@@ -1,5 +1,25 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Fase 1: backend validado en PostgreSQL TEST — 28 de septiembre de 2026
+
+- Estado vigente: implementación de Solicitudes Web revisada en `feature/solicitudes-web`. Se creó PostgreSQL TEST local aislado en `127.0.0.1:55432/miqa_store_test_db`, usuario `miqa_store_local`, según la validación manual confirmada por el propietario. Contraseña externa, nunca documentada ni versionada.
+- Con `SPRING_PROFILES_ACTIVE=test`, `./mvnw.cmd test` terminó en **BUILD SUCCESS: 123 tests, 0 failures, 0 errors, 2 skipped**. Los reportes locales Surefire corroboran los totales; `QuoteRequestApiTest` pasó 14 tests y `TestDatabaseIsolationTest` 12. No se repitió la suite durante la revisión final porque solo se actualizó documentación.
+- Flyway validó siete migraciones y aplicó correctamente **V1–V7 desde esquema vacío**, dejando TEST en versión v7, según la ejecución confirmada. V7 quedó validada; V1–V6 no se modificaron. No se aplicó V7 fuera de TEST.
+- POST público con contacto obligatorio, clave UUID obligatoria, referencia por secuencia, idempotencia concurrente y snapshot histórico transaccional. V7 no tiene FK hacia el catálogo vivo ni columnas de precios. Cantidades manuales exactas, PACK y AREA conservan su contrato; límites de 50 ítems y 64 KiB, CORS explícito, administración con JWT y respuesta sin PII.
+- Revisión final sin hallazgos bloqueantes ni cambios de comportamiento. DEV, PROD y ERP no fueron tocados; sin VPS, push, deploy ni cambio de rama. El cierre se limita a un commit local del backend.
+- Pendientes: envío Angular, WhatsApp posterior a persistencia, limitación por cliente mediante proxy confiable y política de acceso/retención de contacto. El límite actual es global por instancia (120 POST/minuto), no por IP. La Fase 1 completa sigue pendiente. La ejecución específica del helper TEST no se deduce del resultado de Maven: se conserva su validación estática documentada.
+
+Las secciones siguientes son antecedentes; sus pendientes de PostgreSQL/V7 quedan supersedidos por esta validación.
+
+## Aislamiento exclusivo TEST — 28 de septiembre de 2026
+
+- Se conservan los cambios locales de Solicitudes Web en `feature/solicitudes-web`. Esta tarea solo endurece TEST y prepara su procedimiento; no ejecuta pruebas integradas ni modifica V7 o lógica de solicitudes.
+- `LocalDatabaseGuard` continúa como EnvironmentPostProcessor registrado antes de DataSource/Flyway y después de ConfigData. TEST exige URL exacta `127.0.0.1:55432/miqa_store_test_db`, usuario `miqa_store_local`; valida URL datasource/Hikari/Flyway mediante Binder y rechaza JNDI, clases/pools/drivers alternativos y mapas de propiedades JDBC. Perfiles no-test conservan sus reglas. Errores sanitizados sin valores ni causas sensibles.
+- `application-test.properties` fija host/puerto/base/usuario. Solo la contraseña se obtiene de `TEST_DB_PASSWORD`. Variables genéricas DB_* y las antiguas TEST_DB_PORT/USERNAME no redirigen TEST.
+- Nuevo `scripts/Start-TestPostgres.ps1`, preparado pero NO ejecutado: clúster separado `.local/postgres-test/data`, loopback:55432, marca TEST, contraseña oculta/env, creación solo con `-CreateDatabase`. No reutiliza el clúster compartido ni configura otras bases de aplicación; createdb necesita la base de mantenimiento postgres para crear exclusivamente TEST. Sin migraciones ni tests automáticos. Ver procedimiento y límites en README.
+- Validación: 26 pruebas unitarias de aislamiento/configuración aprobadas, sin arrancar Spring o DB; parseo estático del script. Compilación y package con tests omitidos aprobados. Integración HTTP/PostgreSQL y ejecución del script siguen pendientes.
+- PostgreSQL NO iniciado, Flyway NO ejecutado, V7 NO aplicada. Sin DEV/PROD/ERP, commit, push, deploy ni cambio a main. La Fase 1 sigue incompleta; no reinterpretar las validaciones históricas siguientes como pruebas de V7.
+
 ## Corrección de eliminación de categorías y contexto JPA — 17 de septiembre de 2026
 
 - El DELETE de una categoría vacía podía fallar al crear el tombstone de su slug y desvincularlo mediante un bulk UPDATE en la misma transacción. El UPDATE modificaba PostgreSQL, pero dejaba el `CategorySlugAlias` administrado apuntando en memoria a la categoría que se eliminaba; el flush posterior de Hibernate detectaba esa referencia obsoleta y Spring la traducía a `InvalidDataAccessApiUsageException`.

@@ -146,7 +146,7 @@ class CatalogApiTest {
         }
     }
     @Test void flywayAppliedMigrationsAndConstraintsAreEnforced() {
-        assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success", Integer.class)).isEqualTo(6);
+        assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success", Integer.class)).isEqualTo(7);
         assertThatThrownBy(() -> jdbc.update("update products set pack_size=null where id='tarjetas-personales'")).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("delete from categories where id='imprenta-papeleria'")).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("insert into product_images(id,product_id,url,alt_text,primary_image) values ('duplicate-primary','banner','/x.png','x',true)")).isInstanceOf(DataIntegrityViolationException.class);

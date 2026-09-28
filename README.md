@@ -1,5 +1,36 @@
 # MIQA Store API
 
+## PostgreSQL TEST exclusivo — 28 de septiembre de 2026
+
+Este procedimiento reemplaza **solo para TEST** las instrucciones históricas de helpers compartidos que aparecen más abajo. El 28/09/2026 el propietario confirmó la creación del PostgreSQL TEST local aislado y la aplicación de V1–V7 desde esquema vacío. Flyway validó siete migraciones y dejó TEST en v7. DEV, PROD y ERP no fueron tocados.
+
+Con `SPRING_PROFILES_ACTIVE=test`, `./mvnw.cmd test` terminó en **BUILD SUCCESS: 123 tests, 0 failures, 0 errors, 2 skipped**. Los reportes Surefire locales corroboran esos totales, incluidos 14 tests de `QuoteRequestApiTest` y 12 de `TestDatabaseIsolationTest`. La revisión final solo actualizó documentación y no repitió la suite ni conectó a bases de datos.
+
+- Destino fijo del perfil `test`: `jdbc:postgresql://127.0.0.1:55432/miqa_store_test_db`, usuario `miqa_store_local`. Contraseña únicamente mediante `TEST_DB_PASSWORD`; sin valor por defecto. `DB_*`, `TEST_DB_PORT` y `TEST_DB_USERNAME` no configuran este perfil.
+- `LocalDatabaseGuard` está registrado como `EnvironmentPostProcessor` en `META-INF/spring.factories`. Corre después de ConfigData y antes de crear los beans DataSource/Flyway. Usa el Binder de Spring Boot para validar propiedades efectivas y aliases de variables de entorno.
+- Exige la URL exacta en `spring.datasource.url` y en cualquier `spring.datasource.hikari.jdbc-url` / `spring.flyway.url` explícita. Valida usuario, driver PostgreSQL y pool Hikari. Rechaza JNDI general y de Hikari, clases DataSource alternativas y mapas `hikari.data-source-properties` / `flyway.jdbc-properties`, soportados por las dependencias pero innecesarios en nuestro TEST. Rechaza combinar test con local/prod. Los fallos no incluyen valores o causas que puedan revelar secretos.
+- No usar `Start-LocalPostgres.ps1` ni `Use-LocalDatabase.ps1` para estas pruebas. No se modificaron esos scripts.
+
+**Procedimiento para preparar o reutilizar exclusivamente TEST (no ejecutado durante esta revisión):**
+
+```powershell
+# Desde la raíz del backend; revisar el script antes de ejecutar.
+# Primera preparación: crea un clúster NUEVO exclusivamente TEST y su base.
+.\scripts\Start-TestPostgres.ps1 -CreateDatabase
+# Arranques posteriores del mismo clúster:
+.\scripts\Start-TestPostgres.ps1
+```
+
+El script usa `.local/postgres-test/data`, separado del antiguo `.local/postgres`. No reutiliza ni detiene otros procesos que ocupen 55432. Requiere marca TEST para reutilizar un clúster existente, rechaza junctions en sus directorios y pide la contraseña oculta si `TEST_DB_PASSWORD` no está presente. Para initdb usa un archivo temporal eliminado en `finally`; no persiste otra copia de la contraseña ni la incluye en argumentos. Mantener la contraseña elegida en un gestor seguro para futuros arranques.
+
+Solo `-CreateDatabase` permite inicializar/crear. `createdb` usa la base de mantenimiento `postgres` exclusivamente para crear `miqa_store_test_db`; la comprobación SQL conecta únicamente a TEST y consulta `current_database()`. No ejecuta migraciones, Maven ni pruebas. Neutraliza/restaura las variables libpq `PG*` para esos comandos. Al terminar exporta `SPRING_PROFILES_ACTIVE=test` y conserva `TEST_DB_PASSWORD` en la sesión; no configura perfil local ni variables genéricas `DB_*`. La contraseña puede retirarse de la sesión con `Remove-Item Env:TEST_DB_PASSWORD` después de las futuras pruebas.
+
+Las pruebas integradas conservan `@ActiveProfiles("test")` y ya fueron ejecutadas contra TEST. Un `mvn test` completo arranca Spring/Flyway: no ejecutarlo como validación puramente unitaria ni redirigirlo a otras bases.
+
+Validación de este cambio: 26 pruebas unitarias de `TestDatabaseIsolationTest`, `ConfigurationTest` y `ProductionConfigurationTest` aprobadas, sin contexto Spring ni DB; parseo AST PowerShell sin ejecutar el script. La cobertura incluye aliases, prioridad de propiedades, tres URLs, JNDI, mapas de conexión y regresiones no-test. Compilación/package sin tests también comprobados.
+
+Alcance de la garantía: autoconfiguración actual de Boot/JDBC/Hikari/Flyway y propiedades disponibles en la preparación del entorno. Un futuro DataSource/Flyway creado manualmente, código que abra JDBC fuera de esa configuración o propiedades de conexión añadidas después de esta fase requerirían nueva revisión; no existen esas rutas alternativas en el proyecto auditado. La suite PostgreSQL está validada; el resultado de Maven no acredita por sí solo la ejecución específica del script, cuya revisión estática se conserva. La Fase 1 no está terminada: faltan Angular y WhatsApp después de persistir. El rate limit actual es global por instancia; protección por cliente/proxy y política de retención de contacto siguen pendientes.
+
 ## Preparación de producción LOCAL — 14 de septiembre de 2026
 
 Perfil `prod` y plantillas VPS preparados, **sin deploy, VPS, Cloudflare, DNS, commit, push ni remote nuevo**. Frontend sigue en Cloudflare (`https://store.solucionesmicaela.com`); API futura `https://api-store.solucionesmicaela.com` en VPS, loopback `127.0.0.1:8082`, PostgreSQL `miqa_store_db` y media propios, separados del ERP.
