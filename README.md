@@ -1,5 +1,46 @@
 # MIQA Store API
 
+## Estado de Fase 1 — 2026-09-28
+
+Solicitud Web persistente implementada e integración local real validada el **2026-09-28**, según confirmación del propietario: Angular `localhost:4200` → backend TEST `localhost:8081` → PostgreSQL TEST `127.0.0.1:55432/miqa_store_test_db` → solicitud persistida → referencia devuelta al frontend → WhatsApp preparado después de persistir.
+
+La prueba generó `MIQA-000017` únicamente en TEST. Se comprobaron `RECIBIDA` / `TIENDA_VIRTUAL`, Roll Up, `QUANTITY`, cantidad **5** y snapshot histórico JSONB persistido. No se incluyen datos personales de la prueba.
+
+Idempotencia cubierta por tests: misma clave y contenido recuperan la misma solicitud/referencia sin duplicados; misma clave con contenido diferente devuelve 409 sin modificar la original ni crear otra. La recuperación frontend de intentos pendientes usa `sessionStorage` y se limita a la sesión/pestaña correspondiente.
+
+Precios, mapeo ERP, bandeja ERP y conversión a cotización/OT siguen pendientes. Esta actualización documental no repite tests ni valida un despliegue; no requiere acceso a DEV/PROD/VPS/ERP.
+
+## Arranque manual para integración Angular contra TEST local
+
+Desde la raíz del backend:
+
+```powershell
+.\scripts\Start-TestApp.ps1
+```
+
+Si Windows bloquea scripts (como en esta máquina), este comando único permite ejecutar solo en el proceso nuevo, sin cambiar la política global:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-TestApp.ps1
+```
+
+Requiere Java 21, Maven Wrapper disponible y PostgreSQL TEST ya iniciado. Solicita `TEST_DB_PASSWORD` de forma oculta si no está presente. No escribir contraseñas en comandos, archivos ni Git. El proceso se detiene con Ctrl+C; restaura las variables y el directorio anterior en `finally`. Si el script pidió la contraseña, la retira al terminar; si ya existía, conserva el valor previo en la sesión del invocador.
+
+Destino exclusivo: `jdbc:postgresql://127.0.0.1:55432/miqa_store_test_db`, usuario `miqa_store_local`. API en `127.0.0.1:8081` (accesible como `http://localhost:8081`), CORS `http://localhost:4200`. Media aislada en `.local/test-app-media`. No inicia PostgreSQL, túneles, cuentas administrativas ni tests; el arranque normal ejecuta Flyway exclusivamente en TEST, con `clean-disabled=true` y Hibernate `validate`.
+
+Causa del problema anterior: `spring-boot:run` no añade `src/test/resources` al classpath normal. Activar `test` por sí solo no carga ese archivo; permanecían los placeholders principales de datasource/JWT. El helper establece `SPRING_CONFIG_LOCATION` con URI absolutas de `src/main/resources/application.properties` y `src/test/resources/application-test.properties`, en ese orden. Reutiliza exactamente datasource/CORS/JWT TEST, sin copiar secretos, mover recursos al JAR ni añadir clases de tests al runtime. No necesita `ADMIN_JWT_SECRET`: usa la clave exclusivamente TEST ya existente. Nunca utilizar esa clave pública de pruebas fuera de TEST.
+
+Antes de pedir la contraseña o ejecutar Maven rechaza variables heredadas de Spring, servidor, datasource, JWT, media y logging, así como `SPRING_APPLICATION_JSON`, opciones JVM/Maven y archivos `.mvn/jvm.config` o `.mvn/maven.config` no vacíos. Solo permite el perfil heredado si ya es exactamente `test`. Los mensajes identifican el nombre de la variable, nunca su valor. Ante rechazo, abrir una sesión limpia y retirar la variable indicada; no utilizar los helpers DEV/local compartidos. La guarda `LocalDatabaseGuard` permanece intacta y valida las propiedades efectivas antes de DataSource/Flyway.
+
+Validación del 28/09/2026: **28 tests Java, 0 fallos/errores**, incluidos carga real de ambos archivos y rechazo de destinos alternativos en datasource/Hikari/Flyway. **26 comprobaciones PowerShell** con wrapper simulado: overrides, rutas con espacios, contraseña por entorno/prompt simulado, restauración y error de Maven. Comandos:
+
+```powershell
+mvn -o '-Dtest=ManualTestConfigurationTest,TestDatabaseIsolationTest,ConfigurationTest,ProductionConfigurationTest' test
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Test-StartTestApp.ps1
+```
+
+No se abrió ninguna conexión a base de datos durante esa validación del launcher; `TEST_DB_PASSWORD` no estaba disponible en la sesión del agente. La integración local real fue confirmada posteriormente por el propietario, como se registra arriba. Los 123 tests históricos documentados debajo no son una nueva ejecución ni acreditan por sí solos la ejecución específica del helper. No se modificaron V1–V7, `LocalDatabaseGuard`, propiedades existentes, DEV/PROD, VPS ni ERP.
+
 ## PostgreSQL TEST exclusivo — 28 de septiembre de 2026
 
 Este procedimiento reemplaza **solo para TEST** las instrucciones históricas de helpers compartidos que aparecen más abajo. El 28/09/2026 el propietario confirmó la creación del PostgreSQL TEST local aislado y la aplicación de V1–V7 desde esquema vacío. Flyway validó siete migraciones y dejó TEST en v7. DEV, PROD y ERP no fueron tocados.
@@ -29,7 +70,7 @@ Las pruebas integradas conservan `@ActiveProfiles("test")` y ya fueron ejecutada
 
 Validación de este cambio: 26 pruebas unitarias de `TestDatabaseIsolationTest`, `ConfigurationTest` y `ProductionConfigurationTest` aprobadas, sin contexto Spring ni DB; parseo AST PowerShell sin ejecutar el script. La cobertura incluye aliases, prioridad de propiedades, tres URLs, JNDI, mapas de conexión y regresiones no-test. Compilación/package sin tests también comprobados.
 
-Alcance de la garantía: autoconfiguración actual de Boot/JDBC/Hikari/Flyway y propiedades disponibles en la preparación del entorno. Un futuro DataSource/Flyway creado manualmente, código que abra JDBC fuera de esa configuración o propiedades de conexión añadidas después de esta fase requerirían nueva revisión; no existen esas rutas alternativas en el proyecto auditado. La suite PostgreSQL está validada; el resultado de Maven no acredita por sí solo la ejecución específica del script, cuya revisión estática se conserva. La Fase 1 no está terminada: faltan Angular y WhatsApp después de persistir. El rate limit actual es global por instancia; protección por cliente/proxy y política de retención de contacto siguen pendientes.
+Alcance de la garantía: autoconfiguración actual de Boot/JDBC/Hikari/Flyway y propiedades disponibles en la preparación del entorno. Un futuro DataSource/Flyway creado manualmente, código que abra JDBC fuera de esa configuración o propiedades de conexión añadidas después de esta fase requerirían nueva revisión; no existen esas rutas alternativas en el proyecto auditado. La suite PostgreSQL está validada; el resultado de Maven no acredita por sí solo la ejecución específica del script, cuya revisión estática se conserva. Angular y WhatsApp después de persistir están implementados y la integración local real de Fase 1 está validada. El rate limit actual es global por instancia; protección por cliente/proxy y política de retención de contacto siguen pendientes.
 
 ## Preparación de producción LOCAL — 14 de septiembre de 2026
 

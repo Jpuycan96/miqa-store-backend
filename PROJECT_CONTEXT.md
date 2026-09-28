@@ -1,5 +1,22 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Fase 1: integración local real validada — 28 de septiembre de 2026
+
+- Solicitud Web persistente implementada. El propietario confirmó la validación local real del **2026-09-28**: Angular `localhost:4200` → backend TEST `localhost:8081` → PostgreSQL TEST `127.0.0.1:55432/miqa_store_test_db` → solicitud persistida → referencia devuelta al frontend → WhatsApp preparado después de persistir.
+- La prueba generó `MIQA-000017` únicamente en TEST. Se comprobaron `RECIBIDA` / `TIENDA_VIRTUAL`, Roll Up, `QUANTITY`, cantidad **5** y snapshot histórico JSONB persistido. No se incluyen datos personales de la prueba.
+- Idempotencia cubierta por tests: misma clave y contenido devuelven la misma solicitud/referencia sin duplicados; contenido diferente con la misma clave responde 409 sin modificar la original ni crear otra.
+- La recuperación de intentos pendientes frontend usa `sessionStorage`, limitada a la sesión/pestaña correspondiente. Precios, mapeo ERP, bandeja ERP y conversión a cotización/OT siguen pendientes, al igual que protección por cliente/proxy y política de acceso/retención antes de operación pública.
+- Esta actualización es documental: no repite tests ni accede a bases de datos. Las validaciones históricas siguientes se conservan; sus pendientes de integración Angular/WhatsApp quedan supersedidos por esta confirmación. No implica despliegue ni acceso a DEV/PROD/VPS/ERP.
+
+## Arranque manual TEST para Angular — 28 de septiembre de 2026
+
+- `scripts/Start-TestApp.ps1` resuelve la ausencia de recursos TEST en el classpath de `spring-boot:run`: carga explícitamente mediante `SPRING_CONFIG_LOCATION` los archivos existentes main/application.properties y test/application-test.properties. Sin duplicar configuración JWT/datasource ni incluir clases de tests en runtime.
+- Perfil test, servidor loopback:8081, DB exclusiva `127.0.0.1:55432/miqa_store_test_db` como `miqa_store_local`, CORS localhost:4200 y clave JWT exclusivamente TEST del archivo existente. Contraseña externa `TEST_DB_PASSWORD`, prompt oculto si falta, nunca archivo/argumento/log. Media manual separada en `.local/test-app-media`; variables/directorio restaurados en finally.
+- Antes de lanzar Maven rechaza overrides heredados Spring/servidor/DB/JWT/logging/media, opciones JVM/Maven y configuración adicional `.mvn` no vacía. `LocalDatabaseGuard` intacta como validación final anterior a DataSource/Flyway. V1–V7, pom y properties sin cambios. El helper no inicia PostgreSQL ni crea usuarios; Spring ejecuta Flyway normal solo contra TEST.
+- Validación: **28 tests Java aprobados (0 fallos/errores)**: ManualTestConfigurationTest (2), TestDatabaseIsolationTest (12), ConfigurationTest (7), ProductionConfigurationTest (7). Carga ConfigData real sin beans ni JDBC y rechazos de DB DEV/PROD/ERP/remotas. **26 comprobaciones del launcher aprobadas** con Maven simulado, sin Java/DB/red; incluye rutas con espacios, overrides, prompt simulado y limpieza tras fallos.
+- Durante la validación del launcher, `TEST_DB_PASSWORD` no estaba disponible en la sesión del agente; no se intentó obtenerla de archivos ni se abrió conexión a ninguna BD. La integración local real fue confirmada posteriormente por el propietario, como se registra arriba. Los 123 tests anteriores siguen siendo evidencia histórica, no repetida aquí; no se infiere de ellos la ejecución específica del helper.
+- Comando: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-TestApp.ps1` cuando la política de Windows impide `.\scripts\Start-TestApp.ps1`; Bypass afecta únicamente al nuevo proceso. Detalles en README. Sin commit/push/merge/deploy, cambio de rama, DEV/PROD/VPS/ERP ni cambios al trabajo frontend pendiente.
+
 ## Fase 1: backend validado en PostgreSQL TEST — 28 de septiembre de 2026
 
 - Estado vigente: implementación de Solicitudes Web revisada en `feature/solicitudes-web`. Se creó PostgreSQL TEST local aislado en `127.0.0.1:55432/miqa_store_test_db`, usuario `miqa_store_local`, según la validación manual confirmada por el propietario. Contraseña externa, nunca documentada ni versionada.
