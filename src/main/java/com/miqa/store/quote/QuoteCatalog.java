@@ -13,6 +13,9 @@ public class QuoteCatalog {
     public QuoteCatalog(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
     public QuoteSnapshot snapshot(Item item) {
+        // Bound products must never bypass ERP validation via the legacy endpoint or an old cart.
+        if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM product_erp_bindings WHERE product_id = ?)",
+                Boolean.class, item.productId()))) throw QuoteRequestFailure.catalogChanged();
         var products = jdbc.query("""
                 SELECT p.*, c.name AS category_name, c.slug AS category_slug
                 FROM products p JOIN categories c ON c.id = p.category_id

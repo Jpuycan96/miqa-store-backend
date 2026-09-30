@@ -1,5 +1,12 @@
 # MIQA Store API
 
+## Configurador público ERP y solicitudes v2 — 2B.4
+
+Los GET públicos de Product incluyen configuración segura desde la proyección local.
+Nuevo POST `/api/public/quote-requests/v2`, con legacy preservado y snapshot ERP histórico.
+V9 preparada, **no aplicada**. Contrato, compatibilidad y validación en
+[QUOTE_REQUEST_V2.md](QUOTE_REQUEST_V2.md).
+
 ## Integración ERP — Fase 2B.2
 
 Infraestructura local de proyección ERP y vínculos independientes con publicaciones.

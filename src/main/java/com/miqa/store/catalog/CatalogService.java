@@ -17,11 +17,14 @@ public class CatalogService {
     private final CategorySlugAliasRepository categoryAliases;
     private final ProductRepository products;
     private final MediaProperties media;
-    public CatalogService(CategoryRepository categories, CategorySlugAliasRepository categoryAliases, ProductRepository products, MediaProperties media) {
+    private final com.miqa.store.erp.PublicErpConfiguration configurations;
+    public CatalogService(CategoryRepository categories, CategorySlugAliasRepository categoryAliases, ProductRepository products, MediaProperties media,
+                          com.miqa.store.erp.PublicErpConfiguration configurations) {
         this.categories = categories;
         this.categoryAliases = categoryAliases;
         this.products = products;
         this.media = media;
+        this.configurations = configurations;
     }
     public List<CategoryDto> categories() {
         return categories.findByActiveTrueOrderByDisplayOrderAscIdAsc().stream().map(this::categoryDto).toList();
@@ -59,6 +62,7 @@ public class CatalogService {
                 product.isFeatured(), product.isPublished(), product.getSaleType(), product.getUnitLabel(), product.getPackSize(), product.getPackLabel(),
                 product.getMinQuantity(), product.getQuantityStep(),
                 product.getMaterials().stream().filter(ProductMaterial::isActive).map(option -> new OptionDto(option.getId(), option.getName())).toList(),
-                product.getExtras().stream().filter(ProductExtra::isActive).map(option -> new OptionDto(option.getId(), option.getName())).toList());
+                product.getExtras().stream().filter(ProductExtra::isActive).map(option -> new OptionDto(option.getId(), option.getName())).toList(),
+                configurations.configuration(product.getId()));
     }
 }

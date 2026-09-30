@@ -1,5 +1,14 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Fase 2B.4: configuración pública y solicitudes v2 — 30 de septiembre de 2026
+
+- Partida verificada: backend limpio en `feature/solicitudes-web`, HEAD `eefca0d`; frontend limpio en la misma rama, HEAD `f358f91`. El propietario confirmó prueba real de 2B.2 y binding Banner → ERP 1 mediante 2B.3; no se repitió esa conexión.
+- Product público suma configuration LEGACY/ERP/UNAVAILABLE desde binding/proyección local. No llamadas ERP por visita ni exposición de claves; Admin sigue protegido. Sin binding conserva legacy; binding inactivo/no disponible/inválido bloquea configuración sin ocultar la publicación ni caer a reglas legacy.
+- Nuevo POST `/api/public/quote-requests/v2` para ítems ERP o mixtos. Snapshot histórico ERP v2 con nombres autoritativos, revisiones, material/modelo, cantidad decimal, medidas y configuración. Snapshot/POST/hash v1 preservados; nuevos envíos legacy de un Product vinculado se rechazan con 409 para evitar evasión. Reintentos ya confirmados se recuperan antes de revalidar catálogo.
+- V9 preparada, **NO ejecutada**: tabla independiente quote_request_v2_items, orden original y snapshots v1/v2; cabecera/secuencia/idempotencia compartidas en quote_requests. V1–V8 intactos, sin reescritura histórica. Sin Product eliminado, migración masiva, precios o envío a ERP. Lecturas y persistencia del POST en transacción REPEATABLE_READ.
+- Validación: **106 tests backend aprobados**, cero fallos/errores/omitidos; frontend **155/155** y build offline correcto; Edge local simulado con 8 auditorías axe sin infracciones a 390/1440 px. Sin DB/Flyway/ERP/producción. Empaquetado habitual bloqueado por rename del JAR existente; paquete exitoso en `.tmp/phase2b4-build/target/miqa-store-backend-0.0.1-SNAPSHOT.jar`, sin detener procesos ajenos.
+- Pendiente V9/manual TEST y prueba real de persistencia PostgreSQL de v2. Contrato, decisiones, límites dimensionales MIQA y lectura futura de ambas tablas en [QUOTE_REQUEST_V2.md](QUOTE_REQUEST_V2.md). No commit/push/merge/deploy, staging o cambio de rama; ERP/GoPrint intactos.
+
 ## Fase 2B.2: proyección ERP y vínculos — 29 de septiembre de 2026
 
 - Implementación local en `feature/solicitudes-web`, sin commit/staging/push/merge/deploy ni cambio de rama. ERP inspeccionado solo en fuentes del contrato v1; sin cambios ni llamadas al ERP, GoPrint, frontend o producción. No se leyeron ni modificaron secretos existentes o application-dev.properties.

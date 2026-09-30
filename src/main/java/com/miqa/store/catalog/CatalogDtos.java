@@ -13,5 +13,6 @@ public final class CatalogDtos {
             String categorySlug, CategoryDto category, String image, List<String> gallery, List<ImageDto> images,
             boolean featured, boolean published, ProductSaleType saleType, String unitLabel,
             Integer packSize, String packLabel, Integer minQuantity, Integer step,
-            List<OptionDto> materials, List<OptionDto> extras) {}
+            List<OptionDto> materials, List<OptionDto> extras,
+            com.miqa.store.erp.PublicErpConfiguration.Configuration configuration) {}
 }

@@ -91,7 +91,12 @@ class QuoteCatalogTest {
     @Test @SuppressWarnings("unchecked") void activeMaterialsRequireSelectionAsInExistingFrontend() {
         var jdbc = mock(JdbcTemplate.class);
         when(jdbc.query(contains("FROM products"), any(RowMapper.class), eq("p"))).thenReturn(List.of(product(QUANTITY)));
-        when(jdbc.queryForObject(contains("SELECT EXISTS"), eq(Boolean.class), eq("p"))).thenReturn(true);
+        when(jdbc.queryForObject(contains("FROM product_materials"), eq(Boolean.class), eq("p"))).thenReturn(true);
         status(() -> new QuoteCatalog(jdbc).snapshot(item(QUANTITY)), 400);
+    }
+    @Test void boundProductCannotBypassConfigurationThroughPhaseOne() {
+        var jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(contains("FROM product_erp_bindings"), eq(Boolean.class), eq("p"))).thenReturn(true);
+        status(() -> new QuoteCatalog(jdbc).snapshot(item(QUANTITY)), 409);
     }
 }

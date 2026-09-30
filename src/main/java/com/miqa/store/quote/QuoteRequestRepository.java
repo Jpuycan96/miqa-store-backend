@@ -48,6 +48,17 @@ public class QuoteRequestRepository {
         return new Receipt(reference, receivedAt, canonical.hash());
     }
 
+    public Receipt insertV2(QuoteRequestCanonicalizer.Canonical canonical, List<QuoteV2Dtos.StoredItem> items) {
+        // Same request sequence/contact/idempotency table; no fake legacy quantity or dimensions.
+        var receipt = insert(canonical, List.of());
+        int position = 0;
+        for (var item : items) jdbc.update("""
+                INSERT INTO quote_request_v2_items(id, request_id, position, product_id, snapshot)
+                SELECT ?, id, ?, ?, CAST(? AS jsonb) FROM quote_requests WHERE idempotency_key = ?
+                """, UUID.randomUUID().toString(), ++position, item.productId(), mapper.writeValueAsString(item.snapshot()), canonical.key());
+        return receipt;
+    }
+
     static String reference(long number) { return "MIQA-" + String.format(Locale.ROOT, "%06d", number); }
 
     public record Receipt(String reference, Instant receivedAt, String hash) {

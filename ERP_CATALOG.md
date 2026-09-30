@@ -1,5 +1,13 @@
 # Fase 2B.2: proyección local ERP
 
+Actualización 2B.4 (30/09/2026): la proyección ahora alimenta la configuración pública
+segura de Product y solicitudes v2. Ver [QUOTE_REQUEST_V2.md](QUOTE_REQUEST_V2.md).
+Los endpoints y seguridad administrativos descritos aquí se conservan.
+El propietario confirmó posteriormente la prueba real 2B.2 con ERP DEV y TEST:
+ERP 1 IMPRESIÓN UV/M2 y ERP 101 SELLOS/ESCALA; primera sync 2/2/0 y segunda 2/0/0.
+Las limitaciones de ejecución de las secciones inferiores son el registro histórico
+de la implementación 2B.2, no una invalidación de esa confirmación.
+
 Implementación exclusiva del backend MIQA. `Product` sigue siendo editorial; sus DTO,
 categorías y reglas no cambian. Solicitudes Web conserva `schemaVersion=1` y V7 intactos.
 No hay precios, tarifas, configurador público, solicitudes v2, scheduler ni envíos al ERP.

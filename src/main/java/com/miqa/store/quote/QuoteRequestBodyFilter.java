@@ -19,7 +19,8 @@ public class QuoteRequestBodyFilter extends OncePerRequestFilter {
     public QuoteRequestBodyFilter(ObjectMapper mapper, QuoteRequestRateLimit limit) { this.mapper = mapper; this.limit = limit; }
 
     public static boolean matches(HttpServletRequest request) {
-        return request.getRequestURI().equals(request.getContextPath() + PATH);
+        return request.getRequestURI().equals(request.getContextPath() + PATH)
+                || request.getRequestURI().equals(request.getContextPath() + PATH + "/v2");
     }
 
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
