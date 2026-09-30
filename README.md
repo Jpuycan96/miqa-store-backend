@@ -1,5 +1,12 @@
 # MIQA Store API
 
+## Integración ERP — Fase 2B.2
+
+Infraestructura local de proyección ERP y vínculos independientes con publicaciones.
+V8 preparada, **no aplicada**; sincronización manual y endpoints solo administrativos.
+Diseño, configuración externa, contratos y validación: [ERP_CATALOG.md](ERP_CATALOG.md).
+Product, API pública y solicitudes Fase 1 conservan su comportamiento.
+
 ## Estado de Fase 1 — 2026-09-28
 
 Solicitud Web persistente implementada e integración local real validada el **2026-09-28**, según confirmación del propietario: Angular `localhost:4200` → backend TEST `localhost:8081` → PostgreSQL TEST `127.0.0.1:55432/miqa_store_test_db` → solicitud persistida → referencia devuelta al frontend → WhatsApp preparado después de persistir.
