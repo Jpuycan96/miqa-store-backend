@@ -66,6 +66,35 @@ public class ErpCatalogClient {
         }
     }
 
+    /** Fixed read-only route; callers cannot supply URLs or headers. */
+    public PricingReply evaluatePrice(Object input) {
+        try {
+            URI base = URI.create(baseUrl);
+            boolean loopback = List.of("localhost", "127.0.0.1", "[::1]").contains(base.getHost() == null ? "" : base.getHost());
+            if (apiKey.isBlank() || base.getHost() == null || base.getUserInfo() != null || base.getQuery() != null
+                    || base.getFragment() != null || !("https".equals(base.getScheme()) || "http".equals(base.getScheme()) && loopback))
+                throw new ErpCatalogFailure("NOT_CONFIGURED");
+            var request = HttpRequest.newBuilder(URI.create(baseUrl.replaceAll("/+$", "")
+                    + "/api/integracion/tienda-virtual/v1/precios/evaluar"))
+                    .timeout(Duration.ofSeconds(20)).header("Accept", "application/json")
+                    .header("Content-Type", "application/json").header("X-ERP-Service-Key", apiKey)
+                    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(input))).build();
+            var pending = http.sendAsync(request, info -> List.of(200,409,422).contains(info.statusCode())
+                    ? new LimitedBody() : HttpResponse.BodySubscribers.replacing(""));
+            try {
+                var response = pending.get(20, TimeUnit.SECONDS);
+                if (response.body().contains(apiKey)) throw new ErpCatalogFailure("INVALID_CONTRACT");
+                return new PricingReply(response.statusCode(), response.body());
+            } finally { pending.cancel(true); }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new ErpCatalogFailure("ERP_ERROR");
+        } catch (Exception ex) { throw new ErpCatalogFailure("ERP_ERROR"); }
+    }
+    public record PricingReply(int status, String body) {
+        @Override public String toString() { return "PricingReply[REDACTED]"; }
+    }
+
     @Override public String toString() { return "ErpCatalogClient[REDACTED]"; }
 
     /** Bound allocations before parsing; a rejected/partial body can never mean an empty catalog. */

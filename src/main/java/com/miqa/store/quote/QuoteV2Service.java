@@ -20,18 +20,19 @@ public class QuoteV2Service {
     private final QuoteRequestCanonicalizer legacy;
     private final QuoteCatalog catalog;
     private final ErpQuoteSelection erp;
+    private final com.miqa.store.pricing.ErpPricing pricing;
     private final Validator validator;
     private final ObjectMapper mapper;
     private final TransactionTemplate write;
     private final TransactionTemplate read;
     @Autowired
     public QuoteV2Service(QuoteRequestRepository repository, QuoteRequestCanonicalizer legacy, QuoteCatalog catalog,
-            ErpQuoteSelection erp, Validator validator, ObjectMapper mapper, DataSource dataSource) {
-        this(repository, legacy, catalog, erp, validator, mapper, new JdbcTransactionManager(dataSource));
+            ErpQuoteSelection erp, com.miqa.store.pricing.ErpPricing pricing, Validator validator, ObjectMapper mapper, DataSource dataSource) {
+        this(repository, legacy, catalog, erp, pricing, validator, mapper, new JdbcTransactionManager(dataSource));
     }
     QuoteV2Service(QuoteRequestRepository repository, QuoteRequestCanonicalizer legacy, QuoteCatalog catalog,
-            ErpQuoteSelection erp, Validator validator, ObjectMapper mapper, PlatformTransactionManager transactions) {
-        this.repository=repository; this.legacy=legacy; this.catalog=catalog; this.erp=erp; this.validator=validator; this.mapper=mapper;
+            ErpQuoteSelection erp, com.miqa.store.pricing.ErpPricing pricing, Validator validator, ObjectMapper mapper, PlatformTransactionManager transactions) {
+        this.pricing=pricing; this.repository=repository; this.legacy=legacy; this.catalog=catalog; this.erp=erp; this.validator=validator; this.mapper=mapper;
         write = new TransactionTemplate(transactions);
         write.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         write.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
@@ -39,6 +40,7 @@ public class QuoteV2Service {
         read = new TransactionTemplate(transactions);
         read.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         read.setReadOnly(true);
+        read.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
         read.setTimeout(10);
     }
     public QuoteRequestDtos.Result submit(String key, QuoteV2Dtos.Submission input) {
@@ -50,13 +52,23 @@ public class QuoteV2Service {
                 new QuoteRequestDtos.Submission(normalized.contact(), normalized.notes(), List.of()));
         var previous = read.execute(tx -> repository.find(canonical.key()));
         if (previous != null && previous.isPresent()) return replay(previous.get(), hash);
+        // Local snapshots are detached values; the read transaction ends before any HTTP call.
+        var prepared = Objects.requireNonNull(read.execute(tx -> snapshots(normalized)));
+        var evaluated = prepared.stream().map(item -> {
+            if (!(item.snapshot() instanceof QuoteV2Dtos.ErpSnapshot snapshot)) return item;
+            var result = pricing.evaluate(snapshot);
+            if (result.status()!=com.miqa.store.pricing.PricingDtos.Status.PRICE_AVAILABLE
+                    && result.status()!=com.miqa.store.pricing.PricingDtos.Status.QUOTE_REQUIRED)
+                throw new com.miqa.store.pricing.PricingFailure(result.status());
+            return new QuoteV2Dtos.StoredItem(item.productId(),snapshot.withPricing(result));
+        }).toList();
         try {
             return Objects.requireNonNull(write.execute(tx -> {
                 var existing = repository.find(canonical.key());
                 if (existing.isPresent()) return replay(existing.get(), hash);
-                var items = normalized.items().stream().map(item -> new QuoteV2Dtos.StoredItem(item.productId(),
-                        item.erp() == null ? catalog.snapshot(legacyItem(item)) : erp.snapshot(item))).toList();
-                return new QuoteRequestDtos.Result(repository.insertV2(canonical, items).confirmation(), false);
+                // Detect publication/binding/projection changes while HTTP was in flight.
+                if (!prepared.equals(snapshots(normalized))) throw QuoteRequestFailure.catalogChanged();
+                return new QuoteRequestDtos.Result(repository.insertV2(canonical, evaluated).confirmation(), false);
             }));
         } catch (DataIntegrityViolationException ex) {
             if (!QuoteRequestService.isIdempotencyCollision(ex)) throw ex;
@@ -64,6 +76,10 @@ public class QuoteV2Service {
             if (winner == null || winner.isEmpty()) throw ex;
             return replay(winner.get(), hash);
         }
+    }
+    private List<QuoteV2Dtos.StoredItem> snapshots(QuoteV2Dtos.Submission normalized) {
+        return normalized.items().stream().map(item -> new QuoteV2Dtos.StoredItem(item.productId(),
+                item.erp() == null ? catalog.snapshot(legacyItem(item)) : erp.snapshot(item))).toList();
     }
     QuoteV2Dtos.Submission normalize(String key, QuoteV2Dtos.Submission input) {
         if (input == null || !validator.validate(input).isEmpty()) throw QuoteRequestFailure.invalid();

@@ -7,8 +7,8 @@ import java.time.Instant;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
-class ErpQuoteSelectionTest {
-    static PublicErpConfiguration.Resolved resolved(String form, String models, boolean decimals) {
+public class ErpQuoteSelectionTest {
+    public static PublicErpConfiguration.Resolved resolved(String form, String models, boolean decimals) {
         var fields = switch(form) { case "M2" -> List.of("ancho", "alto", "cantidad"); case "METRO_LINEAL" -> List.of("longitud", "cantidad"); default -> List.of("cantidad"); };
         var config = new ErpCatalogContract.Configuration(new ErpCatalogContract.Quantity("unidad", decimals ? "0.5" : "1", "1",
                 decimals ? "0.5" : null, decimals, decimals ? 2 : 0, "100"), "FIJO", form,
@@ -21,7 +21,7 @@ class ErpQuoteSelectionTest {
         return new PublicErpConfiguration.Resolved("banner","Banner editorial","banner",
                 new PublicErpConfiguration.Configuration("ERP","1",contract.catalogRevision(),"4",config),contract);
     }
-    static QuoteV2Dtos.Item item(String service, String material, String model, String quantity, Map<String,BigDecimal> measures) {
+    public static QuoteV2Dtos.Item item(String service, String material, String model, String quantity, Map<String,BigDecimal> measures) {
         return new QuoteV2Dtos.Item("banner",null,null,new BigDecimal(quantity),null,null,null,List.of(),"Nota",
                 new QuoteV2Dtos.Selection(service,"a".repeat(64),"4",material,model,measures));
     }

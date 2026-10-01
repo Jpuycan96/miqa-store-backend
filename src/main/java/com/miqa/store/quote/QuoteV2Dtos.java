@@ -26,6 +26,13 @@ public final class QuoteV2Dtos {
             String erpServiceId, String serviceName, ErpCatalogContract.Category category,
             String catalogRevision, String configurationVersion, String erpMaterialId, String materialName,
             String erpModelId, String modelName, BigDecimal quantity, Map<String, BigDecimal> measures,
-            ErpCatalogContract.Configuration configuration, String notes) {}
+            ErpCatalogContract.Configuration configuration, String notes,
+            com.miqa.store.pricing.PricingDtos.Historical pricing) {
+        public ErpSnapshot withPricing(com.miqa.store.pricing.PricingDtos.Historical value) {
+            return new ErpSnapshot(schemaVersion,productId,productName,productSlug,erpServiceId,serviceName,category,
+                    catalogRevision,configurationVersion,erpMaterialId,materialName,erpModelId,modelName,quantity,measures,
+                    configuration,notes,value);
+        }
+    }
     public record StoredItem(String productId, Object snapshot) {}
 }

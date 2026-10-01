@@ -1,5 +1,10 @@
 # Fase 2B.4 — configuración pública y solicitudes v2
 
+Actualizacion 2B.5: los nuevos snapshots ERP incluyen precios revalidados contra ERP.
+HTTP se ejecuta fuera de las transacciones locales. El contrato de entrada v2 y sus
+hashes se conservan. Esta ampliacion reemplaza las referencias a ausencia de precios
+y al flujo de transaccion unica de esta nota historica; ver [PRICING_2B5.md](PRICING_2B5.md).
+
 Implementación local sobre `eefca0d`, con frontend sobre `f358f91`, ambos en
 `feature/solicitudes-web`. No commit, push, merge, deploy ni cambios al ERP.
 

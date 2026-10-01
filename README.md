@@ -1,5 +1,11 @@
 # MIQA Store API
 
+## Precios ERP desde MIQA backend - 2B.5
+
+Evaluacion publica segura y revalidacion de precios en solicitudes v2, sin formulas
+locales ni cambios frontend. Contrato, transacciones y comandos de validacion:
+[PRICING_2B5.md](PRICING_2B5.md).
+
 ## Configurador público ERP y solicitudes v2 — 2B.4
 
 Los GET públicos de Product incluyen configuración segura desde la proyección local.

@@ -23,6 +23,9 @@ public class CorsConfiguration implements WebMvcConfigurer {
         } catch (IllegalArgumentException exception) { return false; }
     }
     @Override public void addCorsMappings(CorsRegistry registry) {
+        if (origins.length > 0) registry.addMapping("/api/public/pricing/evaluate").allowedOrigins(origins)
+                .allowedMethods("POST", "OPTIONS").allowedHeaders("Accept", "Content-Type")
+                .allowCredentials(false).maxAge(1800);
         if (origins.length > 0) registry.addMapping("/api/public/quote-requests/v2").allowedOrigins(origins)
                 .allowedMethods("POST", "OPTIONS").allowedHeaders("Accept", "Content-Type", "Idempotency-Key")
                 .allowCredentials(false).maxAge(1800);

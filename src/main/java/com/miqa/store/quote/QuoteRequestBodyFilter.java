@@ -16,10 +16,13 @@ public class QuoteRequestBodyFilter extends OncePerRequestFilter {
     public static final int MAX_BODY_BYTES = 64 * 1024;
     private final ObjectMapper mapper;
     private final QuoteRequestRateLimit limit;
+    // Price previews must not consume the submission budget.
+    private final QuoteRequestRateLimit pricingLimit = new QuoteRequestRateLimit(120);
     public QuoteRequestBodyFilter(ObjectMapper mapper, QuoteRequestRateLimit limit) { this.mapper = mapper; this.limit = limit; }
 
     public static boolean matches(HttpServletRequest request) {
-        return request.getRequestURI().equals(request.getContextPath() + PATH)
+        return request.getRequestURI().equals(request.getContextPath() + com.miqa.store.pricing.PricingController.PATH)
+                || request.getRequestURI().equals(request.getContextPath() + PATH)
                 || request.getRequestURI().equals(request.getContextPath() + PATH + "/v2");
     }
 
@@ -27,7 +30,8 @@ public class QuoteRequestBodyFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         if (!matches(request) || !"POST".equals(request.getMethod())) { chain.doFilter(request, response); return; }
         response.setHeader("Cache-Control", "no-store");
-        int retry = limit.retryAfterSeconds();
+        boolean preview = request.getRequestURI().equals(request.getContextPath() + com.miqa.store.pricing.PricingController.PATH);
+        int retry = (preview ? pricingLimit : limit).retryAfterSeconds();
         if (retry > 0) {
             response.setHeader("Retry-After", Integer.toString(retry));
             reject(response, 429, "TOO_MANY_REQUESTS", "Demasiadas solicitudes; inténtalo más tarde");

@@ -45,6 +45,17 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(ex.status()).header("Cache-Control","no-store").body(new ApiError(Instant.now(),
                 ex.status(),ex.status()==409?"CONFLICT":"INVALID_REQUEST",ex.getMessage(),request.getRequestURI(),Map.of()));
     }
+    @ExceptionHandler(com.miqa.store.pricing.PricingFailure.class)
+    public ResponseEntity<ApiError> pricing(com.miqa.store.pricing.PricingFailure ex,HttpServletRequest request) {
+        int status = ex.status().httpStatus();
+        String message = switch(ex.status()) {
+            case CONFIGURATION_STALE -> "La configuracion cambio; recarga el producto";
+            case CONFIGURATION_INVALID -> "Revisa la configuracion del producto";
+            default -> "No se pudo evaluar el precio; intenta nuevamente";
+        };
+        return ResponseEntity.status(status).header("Cache-Control","no-store").body(new ApiError(Instant.now(),
+                status,ex.status().name(),message,request.getRequestURI(),Map.of()));
+    }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> unexpected(Exception exception, HttpServletRequest request) {
         // Exception messages/causes may contain SQL values or authentication input.

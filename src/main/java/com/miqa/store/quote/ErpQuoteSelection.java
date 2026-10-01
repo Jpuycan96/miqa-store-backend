@@ -16,7 +16,7 @@ public class ErpQuoteSelection {
         catch (CatalogNotFoundException ex) { throw QuoteRequestFailure.catalogChanged(); }
         return snapshot(resolved, item);
     }
-    static QuoteV2Dtos.ErpSnapshot snapshot(PublicErpConfiguration.Resolved resolved, QuoteV2Dtos.Item item) {
+    public static QuoteV2Dtos.ErpSnapshot snapshot(PublicErpConfiguration.Resolved resolved, QuoteV2Dtos.Item item) {
         var contract = resolved.contract();
         var selection = item.erp();
         if (contract == null || !"ERP".equals(resolved.publicConfiguration().mode()) || selection == null
@@ -48,6 +48,6 @@ public class ErpQuoteSelection {
                 contract.erpServiceId(), contract.nombreReferencia(), contract.categoria(), contract.catalogRevision(),
                 contract.configurationVersion(), material.erpMaterialId(), material.nombreReferencia(),
                 model == null ? null : model.erpModelId(), model == null ? null : model.nombreReferencia(), quantity,
-                new TreeMap<>(selection.measures()), config, item.notes());
+                new TreeMap<>(selection.measures()), config, item.notes(), null);
     }
 }
