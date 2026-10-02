@@ -1,5 +1,10 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Correccion del bean de seguridad de exportacion
+
+- Sobre c1f89cf, se renombro unicamente el metodo @Bean a requestExportSecurityFilterChain: el nombre anterior requestExportSecurity colisionaba con el componente @Configuration descubierto por scanning. Seguridad, propiedades y permisos intactos; overriding no habilitado.
+- Validacion focalizada: RequestExportSecurityTest 4/4; despues RequestExportContextTest 1/1 con component scan y setAllowBeanDefinitionOverriding(false). Contexto web minimo inicia y contiene una configuracion y una cadena de exportacion. Sin DB/Flyway/ERP; no acredita arranque integrado con PostgreSQL. Las pruebas anteriores con @Import no reproducian el nombre del componente escaneado.
+
 ## Fase 2B.6.1: exportacion tecnica READ-ONLY - 2 de octubre de 2026
 
 - Inicio: `feature/solicitudes-web`, Git limpio. Solo MIQA backend; sin ERP, frontend, sincronizacion, ACK/outbox, cambios comerciales, push o cotizaciones. Sin git add/commit/push/merge/deploy/cambio de rama.

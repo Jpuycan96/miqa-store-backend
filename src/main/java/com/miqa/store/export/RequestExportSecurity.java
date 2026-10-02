@@ -28,7 +28,7 @@ import java.util.*;
 public class RequestExportSecurity {
     public static final String READ="solicitudes:read";
     @Bean @Order(1) @ConditionalOnWebApplication
-    SecurityFilterChain requestExportSecurity(HttpSecurity http, ObjectMapper mapper,
+    SecurityFilterChain requestExportSecurityFilterChain(HttpSecurity http, ObjectMapper mapper,
             @Value("${app.erp.requests.api-key:${MIQA_ERP_REQUESTS_API_KEY:}}") String key,
             @Value("${app.erp.requests.scopes:${MIQA_ERP_REQUESTS_SCOPES:}}") String scopes) throws Exception {
         var filter=new ServiceKeyFilter(key,scopes,mapper);
