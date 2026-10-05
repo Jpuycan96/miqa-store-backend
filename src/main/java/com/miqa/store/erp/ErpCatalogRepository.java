@@ -37,6 +37,8 @@ public class ErpCatalogRepository {
                 """, service.erpServiceId(), service.catalogRevision(), mapper.writeValueAsString(service), Timestamp.from(now));
     }
 
+    public void reconcile(ErpCatalogContract service) { new ErpEditorialCatalog(jdbc).reconcile(service); }
+
     public void seen(String id, Instant now) {
         // A lightweight freshness write; unchanged JSON/configuration is never rewritten.
         jdbc.update("""
@@ -81,6 +83,8 @@ public class ErpCatalogRepository {
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM erp_catalog_services WHERE erp_service_id = ?)", Boolean.class, id));
     }
     public void bind(String productId, BindingInput input) {
+        if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM product_erp_bindings WHERE product_id = ? AND canonical AND erp_service_id <> ?)", Boolean.class, productId, input.erpServiceId())))
+            throw new com.miqa.store.admin.AdminFailure(409, "La identidad del vinculo canonico no puede reasignarse");
         jdbc.update("""
                 INSERT INTO product_erp_bindings(product_id, erp_service_id, active) VALUES (?, ?, ?)
                 ON CONFLICT (product_id) DO UPDATE SET erp_service_id = EXCLUDED.erp_service_id,
@@ -95,7 +99,7 @@ public class ErpCatalogRepository {
                 JOIN erp_catalog_services s USING (erp_service_id) WHERE b.product_id = ?
                 """, (rs, row) -> new ProductErpBinding(rs.getString("product_id"), rs.getString("erp_service_id"),
                     rs.getBoolean("active"), rs.getBoolean("active") ? rs.getString("sync_state") : "DISABLED",
-                    instant(rs, "created_at"), instant(rs, "updated_at"), instant(rs, "last_synced_at")), productId).stream().findFirst();
+                    instant(rs, "created_at"), instant(rs, "updated_at"), instant(rs, "last_synced_at"), rs.getBoolean("canonical")), productId).stream().findFirst();
     }
     private static Instant instant(ResultSet rs, String field) throws SQLException {
         Timestamp value = rs.getTimestamp(field);

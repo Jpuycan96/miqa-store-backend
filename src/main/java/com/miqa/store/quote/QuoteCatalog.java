@@ -13,36 +13,9 @@ public class QuoteCatalog {
     public QuoteCatalog(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
     public QuoteSnapshot snapshot(Item item) {
-        // Bound products must never bypass ERP validation via the legacy endpoint or an old cart.
-        if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM product_erp_bindings WHERE product_id = ?)",
-                Boolean.class, item.productId()))) throw QuoteRequestFailure.catalogChanged();
-        var products = jdbc.query("""
-                SELECT p.*, c.name AS category_name, c.slug AS category_slug
-                FROM products p JOIN categories c ON c.id = p.category_id
-                WHERE p.id = ? AND p.published AND c.active
-                """, (rs, row) -> new Product(rs.getString("id"), rs.getString("name"), rs.getString("slug"),
-                    new QuoteSnapshot.Category(rs.getString("category_id"), rs.getString("category_name"), rs.getString("category_slug")),
-                    ProductSaleType.valueOf(rs.getString("sale_type")), rs.getString("unit_label"),
-                    rs.getObject("pack_size", Integer.class), rs.getString("pack_label"),
-                    rs.getObject("min_quantity", Integer.class), rs.getObject("quantity_step", Integer.class)), item.productId());
-        if (products.isEmpty()) throw QuoteRequestFailure.catalogChanged();
-        Product product = products.getFirst();
-        if (item.materialId() == null && Boolean.TRUE.equals(jdbc.queryForObject(
-                "SELECT EXISTS (SELECT 1 FROM product_materials WHERE product_id = ? AND active)", Boolean.class, product.id()))) {
-            // Same rule as createQuoteItem: an active material must be selected if the product offers any.
-            throw QuoteRequestFailure.invalid();
-        }
-        var material = item.materialId() == null ? null : option("product_materials", product.id(), item.materialId());
-        var extras = item.extraIds().stream().map(id -> option("product_extras", product.id(), id)).toList();
-        return snapshot(product, item, material, extras);
-    }
-
-    private QuoteSnapshot.Option option(String table, String productId, String id) {
-        // Table names are constants above, never taken from user input.
-        var options = jdbc.query("SELECT id, name FROM " + table + " WHERE product_id = ? AND id = ? AND active",
-                (rs, row) -> new QuoteSnapshot.Option(rs.getString("id"), rs.getString("name")), productId, id);
-        if (options.isEmpty()) throw QuoteRequestFailure.catalogChanged();
-        return options.getFirst();
+        // New public submissions require ERP selection. Historical replay occurs before this call.
+        // Never reinterpret a legacy snapshot using the current binding or catalog.
+        throw QuoteRequestFailure.catalogChanged();
     }
 
     static QuoteSnapshot snapshot(Product product, Item item, QuoteSnapshot.Option material, List<QuoteSnapshot.Option> extras) {

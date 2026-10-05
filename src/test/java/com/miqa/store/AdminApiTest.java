@@ -108,7 +108,8 @@ class AdminApiTest {
   assertThat(call("GET",path,null,200).get(0).get("primaryImage").asBoolean()).isTrue();
   json(upload(pid,"new.png","image/png",imageBytes("png"),null,token),201);
   call("PATCH","/products/"+pid+"/published",Map.of("published",true),200);
-  var publicProduct=json(send("GET","/api/public/products/admin-test-product",null,null),200);
+  json(send("GET","/api/public/products/admin-test-product",null,null),404);
+  var publicProduct=call("GET","/products/"+pid,null,200);
   assertThat(publicProduct.get("images").size()).isEqualTo(3);
   assertThat(publicProduct.get("images").toString()).doesNotContain("/images/hero/sample.png");
  }
@@ -162,7 +163,7 @@ class AdminApiTest {
   var created=call("GET","/categories/"+id,null,200);assertThat(created.get("slug").asText()).isEqualTo("admin-test-category");assertThat(created.get("catalogHeadline").asText()).isEqualTo("Make it visible.");assertThat(created.get("catalogDescription").asText()).isEqualTo("Commercial description.");
   input.put("name","Categoría editada Ñandú");input.put("catalogHeadline","Updated headline");input.put("catalogDescription","Updated description");
   var updated=call("PUT","/categories/"+id,input,200);assertThat(updated.get("slug").asText()).isEqualTo("categoria-editada-nandu");assertThat(updated.get("catalogHeadline").asText()).isEqualTo("Updated headline");assertThat(updated.get("catalogDescription").asText()).isEqualTo("Updated description");
-  var redirects=json(send("GET","/api/public/category-slug-redirects",null,null),200);assertThat(redirects.toString()).contains("admin-test-category","categoria-editada-nandu");
+  var redirects=json(send("GET","/api/public/category-slug-redirects",null,null),200);assertThat(redirects.toString()).doesNotContain("admin-test-category","categoria-editada-nandu");
   input.put("name","  CATEGORÍA editada ñandú  ");call("PUT","/categories/"+id,input,200);assertThat(jdbc.queryForObject("select count(*) from category_slug_aliases where category_id=?",Integer.class,id)).isEqualTo(1);
   call("POST","/categories",input,409);input.put("name","!!!");call("POST","/categories",input,400);
   input.put("name","Admin test invalid html");input.put("catalogHeadline","<b>Unsafe</b>");call("POST","/categories",input,400);
@@ -216,7 +217,7 @@ class AdminApiTest {
   json(send("GET","/api/public/products/admin-test-product",null,null),404);
   call("PATCH",url+"/published",Map.of("published",true),200);call("PATCH",url+"/featured",Map.of("featured",true),200);
   assertThat(call("GET","/products?category=imprenta-papeleria&search=Edited&published=true&featured=true",null,200).size()).isEqualTo(1);
-  json(send("GET","/api/public/products/admin-test-product",null,null),200);
+  json(send("GET","/api/public/products/admin-test-product",null,null),404);
   call("PATCH",url+"/published",Map.of("published",false),200);
   json(send("GET","/api/public/products/admin-test-product",null,null),404);
  }

@@ -24,12 +24,13 @@ class PublicErpConfigurationTest {
         when(rs.getString("sync_state")).thenReturn(state);
         when(rs.getString("erp_service_id")).thenReturn("17");
         when(rs.getString("payload")).thenReturn(payload);
+        when(rs.getString("erp_category_id")).thenReturn("3");
         when(jdbc.query(anyString(), any(RowMapper.class), eq("banner")))
-                .thenAnswer(call -> List.of(((RowMapper<?>)call.getArgument(1)).mapRow(rs, 0)));
+                .thenAnswer(call -> bound && active && "AVAILABLE".equals(state) ? List.of(((RowMapper<?>)call.getArgument(1)).mapRow(rs, 0)) : List.of());
     }
     @Test void unboundIsLegacy() throws Exception {
         row(false, false, null, null);
-        assertThat(service.configuration("banner").mode()).isEqualTo("LEGACY");
+        assertThatThrownBy(() -> service.configuration("banner")).isInstanceOf(CatalogNotFoundException.class);
     }
     @Test void activeAvailableReturnsOnlyPublicAllowlist() throws Exception {
         row(true, true, "AVAILABLE", ErpCatalogTest.JSON);
@@ -42,15 +43,15 @@ class PublicErpConfigurationTest {
     }
     @Test void disabledOrAbsentFromListingCannotFallBackToLegacy() throws Exception {
         row(true, false, "AVAILABLE", ErpCatalogTest.JSON);
-        assertThat(service.configuration("banner").mode()).isEqualTo("UNAVAILABLE");
+        assertThatThrownBy(() -> service.configuration("banner")).isInstanceOf(CatalogNotFoundException.class);
         row(true, true, "PENDING_REVALIDATION", ErpCatalogTest.JSON);
-        assertThat(service.configuration("banner").configuration()).isNull();
+        assertThatThrownBy(() -> service.configuration("banner")).isInstanceOf(CatalogNotFoundException.class);
     }
     @Test void corruptUnsupportedAndMismatchedProjectionFailClosed() throws Exception {
         for (String payload : List.of("{}", ErpCatalogTest.JSON.replace("cantidad\"]", "desconocido\"]"),
                 ErpCatalogTest.JSON.replace("\"erpServiceId\":\"17\"", "\"erpServiceId\":\"18\""))) {
             row(true, true, "AVAILABLE", payload);
-            assertThat(service.configuration("banner").mode()).isEqualTo("UNAVAILABLE");
+            assertThatThrownBy(() -> service.configuration("banner")).isInstanceOf(CatalogNotFoundException.class);
         }
     }
     @Test void hiddenOrAbsentProductHasNoConfiguration() {

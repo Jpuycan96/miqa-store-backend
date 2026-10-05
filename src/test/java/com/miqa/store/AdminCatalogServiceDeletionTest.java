@@ -22,7 +22,7 @@ class AdminCatalogServiceDeletionTest {
     private final CategorySlugAliasRepository aliases = mock(CategorySlugAliasRepository.class);
     private final ProductRepository products = mock(ProductRepository.class);
     private final AdminCatalogService service = new AdminCatalogService(categories, aliases, products,
-            mock(EntityManager.class), new MediaProperties(), mock(ProductImageStorage.class));
+            mock(EntityManager.class, RETURNS_DEEP_STUBS), new MediaProperties(), mock(ProductImageStorage.class));
 
     @Test void emptyCategoryReservesCurrentSlugDetachesAllAliasesAndDeletes() {
         var category = category();

@@ -11,15 +11,19 @@ final class ErpCatalogValidation {
         try {
             require(services != null);
             var ids = new HashSet<String>();
+            var categories = new HashMap<String, String>();
             for (var s : services) {
                 require(s != null && Integer.valueOf(1).equals(s.contractVersion()));
                 require("ERP_GIGANTOGRAFIAS".equals(s.sourceSystem()));
                 require(id(s.erpServiceId()) && ids.add(s.erpServiceId()));
-                require(text(s.nombreReferencia()) && Boolean.TRUE.equals(s.elegible()) && Boolean.TRUE.equals(s.disponible()));
+                require(text(s.nombreReferencia()) && s.nombreReferencia().length() <= 200 && Boolean.TRUE.equals(s.elegible()) && Boolean.TRUE.equals(s.disponible()));
                 require("CONFIGURADA".equals(s.estadoConfiguracion()) && s.motivos() != null && s.motivos().isEmpty());
                 require(text(s.configurationVersion()) && s.catalogRevision() != null && s.catalogRevision().matches("[0-9a-f]{64}"));
                 require(s.evaluatedAt() != null);
-                require(s.categoria() == null || id(s.categoria().erpCategoryId()) && text(s.categoria().nombreReferencia()));
+                require(s.categoria() != null && id(s.categoria().erpCategoryId()) && text(s.categoria().nombreReferencia())
+                        && s.categoria().nombreReferencia().length() <= 160);
+                String categoryName = categories.putIfAbsent(s.categoria().erpCategoryId(), s.categoria().nombreReferencia());
+                require(categoryName == null || categoryName.equals(s.categoria().nombreReferencia()));
                 var c = s.configuracion();
                 require(c != null && c.cantidad() != null && c.medidas() != null && c.materiales() != null);
                 var q = c.cantidad();

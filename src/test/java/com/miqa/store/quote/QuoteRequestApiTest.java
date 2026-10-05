@@ -24,6 +24,8 @@ class QuoteRequestApiTest {
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
+    @Autowired QuoteRequestCanonicalizer canonicalizer;
+    @Autowired QuoteRequestRepository repository;
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
     @BeforeEach void fixtures() {
@@ -65,45 +67,24 @@ class QuoteRequestApiTest {
         jdbc.update("DELETE FROM categories WHERE id IN ('qrt-active','qrt-inactive')");
     }
 
-    @Test void anonymousSubmissionPersistsStateOriginAllTypesAndVersionedOfficialSnapshot() throws Exception {
-        var area = area();
-        area.put("materialId", "qrt-material");
-        area.put("extraIds", List.of("qrt-extra"));
-        area.put("productName", "forged");
-        area.put("areaSquareMeters", 999);
-        area.put("price", 0);
-        var payload = body(item("qrt-quantity", "QUANTITY"), item("qrt-pack", "PACK"), area);
-        payload.put("status", "APPROVED");
-        payload.put("origin", "ERP");
-        payload.put("reference", "forged");
-        var response = post(key(), payload);
-        assertThat(response.statusCode()).isEqualTo(201);
-        JsonNode confirmation = mapper.readTree(response.body());
-        assertThat(confirmation.get("reference").asText()).matches("MIQA-[0-9]{6,}");
-        assertThat(confirmation.propertyNames()).containsExactlyInAnyOrder("reference", "receivedAt", "confirmation");
-        assertThat(response.body()).doesNotContain("quote-test", "999999999", "example.test", "snapshot", "requestHash", "idempotency");
-        assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
-        var header = jdbc.queryForMap("SELECT * FROM quote_requests WHERE reference = ?", confirmation.get("reference").asText());
-        assertThat(header.get("status")).isEqualTo("RECIBIDA");
-        assertThat(header.get("origin")).isEqualTo("TIENDA_VIRTUAL");
-        assertThat(header.get("id")).isNotEqualTo(header.get("reference"));
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM quote_request_items WHERE request_id = ?", Integer.class, header.get("id"))).isEqualTo(3);
-        var snapshots = jdbc.query("SELECT snapshot::text FROM quote_request_items WHERE request_id = ? ORDER BY position",
-                (rs, index) -> mapper.readTree(rs.getString(1)), header.get("id"));
-        assertThat(snapshots.get(0).get("quantity").asLong()).isEqualTo(50L);
-        assertThat(snapshots.get(0).get("rules").get("quantityStep").asInt()).isEqualTo(12);
-        assertThat(snapshots.get(1).get("packSize").asInt()).isEqualTo(1000);
-        assertThat(snapshots.get(1).get("packLabel").asText()).isEqualTo("millar");
-        assertThat(snapshots.get(2).get("areaSquareMeters").decimalValue()).isEqualByComparingTo("3.000000");
-        assertThat(snapshots.get(2).get("material").get("name").asText()).isEqualTo("Material histórico");
-        assertThat(snapshots.get(2).get("extras").get(0).get("name").asText()).isEqualTo("Extra histórico");
-        for (var snapshot : snapshots) {
-            assertThat(snapshot.get("schemaVersion").asInt()).isEqualTo(1);
-            assertThat(snapshot.get("category").get("name").asText()).isEqualTo("Categoría histórica");
-            assertThat(snapshot.toString()).doesNotContain("forged", "\"price\"");
-        }
+    @Test void newLegacySubmissionsAreRejectedWithoutChangingHistoricalCatalog() throws Exception {
+        assertThat(post(key(), body(item("qrt-quantity", "QUANTITY"), item("qrt-pack", "PACK"), area())).statusCode()).isEqualTo(409);
+        assertThat(requestCount()).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM products WHERE id LIKE 'qrt-%'", Integer.class)).isEqualTo(6);
     }
 
+    private QuoteRequestRepository.Receipt historical(String key, Map<String,Object> payload) {
+        var input = mapper.convertValue(payload, QuoteRequestDtos.Submission.class);
+        var canonical = canonicalizer.canonicalize(key, input);
+        var snapshots = canonical.submission().items().stream().map(item -> {
+            var product = new QuoteCatalog.Product(item.productId(), "Historical name", item.productId(),
+                    new QuoteSnapshot.Category("qrt-active", "Historical category", "qrt-active"), item.saleType(),
+                    "unidad", item.packSize(), item.packSize()==null ? null : "millar", 1, 1);
+            return QuoteCatalog.snapshot(product, item, item.materialId()==null ? null : new QuoteSnapshot.Option(item.materialId(), "Historical material"),
+                    item.extraIds().stream().map(id -> new QuoteSnapshot.Option(id, "Historical extra")).toList());
+        }).toList();
+        return repository.insert(canonical, snapshots);
+    }
     @Test void missingAndInvalidIdempotencyKeysAre400AndNoStore() throws Exception {
         for (String key : Arrays.asList(null, "invalid", "1-1-1-1-1")) {
             var response = post(key, body(item("qrt-quantity", "QUANTITY")));
@@ -116,8 +97,7 @@ class QuoteRequestApiTest {
         var item = area(); item.put("materialId", "qrt-material"); item.put("extraIds", List.of("qrt-extra"));
         var payload = body(item);
         String key = key();
-        var first = post(key, payload);
-        assertThat(first.statusCode()).isEqualTo(201);
+        var receipt = historical(key, payload);
         String snapshot = jdbc.queryForObject("SELECT snapshot::text FROM quote_request_items WHERE product_id='qrt-area'", String.class);
         jdbc.update("UPDATE products SET name='Changed', published=false WHERE id='qrt-area'");
         jdbc.update("UPDATE categories SET name='Changed category', active=false WHERE id='qrt-active'");
@@ -125,14 +105,14 @@ class QuoteRequestApiTest {
         jdbc.update("DELETE FROM products WHERE id='qrt-area'");
         var replay = post(key, payload);
         assertThat(replay.statusCode()).isEqualTo(200);
-        assertThat(replay.body()).isEqualTo(first.body());
+        assertThat(mapper.readTree(replay.body()).get("reference").asText()).isEqualTo(receipt.reference());
         assertThat(requestCount()).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT snapshot::text FROM quote_request_items WHERE product_id='qrt-area'", String.class)).isEqualTo(snapshot);
         assertThat(post(key(), payload).statusCode()).isEqualTo(409);
     }
     @Test void reusingKeyWithDifferentContentIs409() throws Exception {
         String key = key(); var item = item("qrt-quantity", "QUANTITY");
-        assertThat(post(key, body(item)).statusCode()).isEqualTo(201);
+        historical(key, body(item));
         item.put("quantity", 51);
         var conflict = post(key, body(item));
         assertThat(conflict.statusCode()).isEqualTo(409);
@@ -158,7 +138,7 @@ class QuoteRequestApiTest {
     }
     @Test void productWithActiveMaterialsRequiresAnExplicitSelection() throws Exception {
         var item = area(); item.remove("materialId");
-        assertThat(post(key(), body(item)).statusCode()).isEqualTo(400);
+        assertThat(post(key(), body(item)).statusCode()).isEqualTo(409);
         assertThat(requestCount()).isZero();
     }
     @Test void invalidDimensionsQuantityAndStalePresentationAreRejected() throws Exception {
@@ -191,19 +171,17 @@ class QuoteRequestApiTest {
         assertThat(response.body()).contains("64 KiB").doesNotContain("5 MB");
         assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
     }
-    @Test void concurrentSameKeyCreatesOneRequestAndReplaysOthers() throws Exception {
+    @Test void concurrentHistoricalReplaysDoNotCreateRequests() throws Exception {
         String key = key();
+        historical(key, body(item("qrt-quantity", "QUANTITY")));
         var responses = concurrent(false, key);
-        assertThat(responses.stream().filter(response -> response.statusCode() == 201).count()).isEqualTo(1);
-        assertThat(responses.stream().filter(response -> response.statusCode() == 200).count()).isEqualTo(7);
-        assertThat(responses.stream().map(HttpResponse::body).distinct().count()).isEqualTo(1);
+        assertThat(responses).allSatisfy(response -> assertThat(response.statusCode()).isEqualTo(200));
         assertThat(requestCount()).isEqualTo(1);
     }
-    @Test void concurrentDifferentKeysReceiveUniqueReferences() throws Exception {
+    @Test void concurrentNewLegacyRequestsAreRejectedWithoutPersistence() throws Exception {
         var responses = concurrent(true, null);
-        assertThat(responses).allSatisfy(response -> assertThat(response.statusCode()).isEqualTo(201));
-        assertThat(responses.stream().map(response -> mapper.readTree(response.body()).get("reference").asText()).distinct().count()).isEqualTo(8);
-        assertThat(requestCount()).isEqualTo(8);
+        assertThat(responses).allSatisfy(response -> assertThat(response.statusCode()).isEqualTo(409));
+        assertThat(requestCount()).isZero();
     }
     @Test void corsPreflightAndAdminProtectionRemainCorrect() throws Exception {
         for (String origin : List.of("http://localhost:4200", "https://untrusted.example")) {

@@ -12,15 +12,20 @@ import java.util.*;
 public class AdminCatalogService {
  private final CategoryRepository categories;private final CategorySlugAliasRepository categoryAliases;private final ProductRepository products;private final EntityManager em;private final MediaProperties media;private final ProductImageStorage storage;
  public AdminCatalogService(CategoryRepository categories,CategorySlugAliasRepository categoryAliases,ProductRepository products,EntityManager em,MediaProperties media,ProductImageStorage storage){this.categories=categories;this.categoryAliases=categoryAliases;this.products=products;this.em=em;this.media=media;this.storage=storage;}
+ private void slugLock(){em.createNativeQuery("SELECT 1 FROM pg_advisory_xact_lock(724193820127)").getSingleResult();}
+ private void legacyCategory(Category c){if(c.getErpCategoryId()!=null)throw new AdminFailure(409,"La estructura de categorias ERP es de solo lectura");}
+ private void legacyTechnical(Product p){if("ERP".equals(p.getCatalogMode()))throw new AdminFailure(409,"La configuracion tecnica pertenece al ERP");}
  private String id(){return UUID.randomUUID().toString();}
  private AdminFailure missing(){return new AdminFailure(404,"Recurso no disponible");}
  private Product entity(String id){return products.findById(id).orElseThrow(this::missing);}
  private Category categoryEntity(String id){return categories.findById(id).orElseThrow(this::missing);}
  public CategoryView category(String id){return categoryView(categoryEntity(id));}
- private CategoryView categoryView(Category c){return new CategoryView(c.getId(),c.getName(),c.getSlug(),c.getDescription(),c.getCatalogHeadline(),c.getCatalogDescription(),c.isActive(),c.getDisplayOrder());}
+ private CategoryView categoryView(Category c){return new CategoryView(c.getId(),c.getName(),c.getSlug(),c.getDescription(),c.getCatalogHeadline(),c.getCatalogDescription(),c.isActive(),c.getDisplayOrder(),c.getErpCategoryId());}
  public List<CategoryView> categories(){return categories.findAll(Sort.by("displayOrder","id")).stream().map(this::categoryView).toList();}
  @Transactional public CategoryView saveCategory(String id,CategoryInput r){
+  slugLock();
   Category c=id==null?new Category():categoryEntity(id);if(id==null)c.setId(id());
+  legacyCategory(c);
   String name=r.name().trim();String slug;
   try{slug=id==null?CategorySlug.fromName(name):CategorySlug.forUpdate(c.getName(),c.getSlug(),name);}catch(IllegalArgumentException ex){throw new AdminFailure(400,ex.getMessage());}
   if(!Objects.equals(slug,c.getSlug())){
@@ -32,9 +37,10 @@ public class AdminCatalogService {
   if(id==null)em.persist(c);em.flush();return categoryView(c);
  }
  private String clean(String value){if(value==null)return null;String cleaned=value.trim();return cleaned.isEmpty()?null:cleaned;}
- @Transactional public CategoryView activeCategory(String id,boolean active){var c=categoryEntity(id);c.setActive(active);return categoryView(c);}
+ @Transactional public CategoryView activeCategory(String id,boolean active){var c=categoryEntity(id);legacyCategory(c);c.setActive(active);return categoryView(c);}
  @Transactional public void deleteCategory(String id){
-  var c=categoryEntity(id);
+  slugLock();
+  var c=categoryEntity(id);legacyCategory(c);
   if(products.existsByCategoryId(id))throw new AdminFailure(409,"No se puede eliminar la categoria porque tiene productos asociados");
   if(!categoryAliases.existsById(c.getSlug()))categoryAliases.saveAndFlush(new CategorySlugAlias(c.getSlug(),c));
   categoryAliases.detachCategory(id);
@@ -53,15 +59,21 @@ public class AdminCatalogService {
   var images=p.getImages().stream().filter(ProductImage::isActive).map(this::imageView).toList();String primary=images.stream().filter(ImageView::primaryImage).findFirst().or(()->images.stream().findFirst()).map(ImageView::publicUrl).orElse("");
   return new ProductView(p.getId(),p.getCategory().getId(),categoryView(p.getCategory()),p.getName(),p.getSlug(),p.getShortDescription(),p.getDescription(),p.getSaleType(),p.getUnitLabel(),p.getPackSize(),p.getPackLabel(),p.getMinQuantity(),p.getQuantityStep(),p.isFeatured(),p.isPublished(),p.getDisplayOrder(),p.getSeoTitle(),p.getSeoDescription(),primary,
    p.getMaterials().stream().map(m->new OptionView(m.getId(),m.getName(),m.isActive(),m.getDisplayOrder())).toList(),
-   p.getExtras().stream().map(m->new OptionView(m.getId(),m.getName(),m.isActive(),m.getDisplayOrder())).toList(),images);
+   p.getExtras().stream().map(m->new OptionView(m.getId(),m.getName(),m.isActive(),m.getDisplayOrder())).toList(),images,p.getCatalogMode());
  }
  @Transactional public ProductView saveProduct(String id,ProductInput r){
+  slugLock();
+  var p=id==null?new Product():entity(id);if(id==null)p.setId(id());
+  boolean erp="ERP".equals(p.getCatalogMode());
+  if(erp && (!Objects.equals(r.categoryId(),p.getCategory().getId()) || r.saleType()!=null || r.unitLabel()!=null
+      || r.packSize()!=null || r.packLabel()!=null || r.minQuantity()!=null || r.quantityStep()!=null))
+   throw new AdminFailure(409,"La categoria y configuracion tecnica pertenecen al ERP");
+  if(!erp && (r.saleType()==null || r.unitLabel()==null || r.unitLabel().isBlank()))throw new AdminFailure(400,"Tipo y unidad requeridos para legacy");
   if(r.saleType()==ProductSaleType.PACK){if(r.packSize()==null||r.packLabel()==null||r.packLabel().isBlank())throw new AdminFailure(400,"PACK requiere packSize positivo y packLabel");}
   else if(r.packSize()!=null||r.packLabel()!=null)throw new AdminFailure(400,"QUANTITY y AREA requieren packSize y packLabel null");
-  var p=id==null?new Product():entity(id);if(id==null)p.setId(id());
   if(products.existsBySlugAndIdNot(r.slug(),p.getId()))throw new AdminFailure(409,"El slug de producto ya existe");
   if(categories.existsBySlug(r.slug())||categoryAliases.existsById(r.slug()))throw new AdminFailure(409,"Ya existe una URL de categoria o alias historico con ese slug de producto");
-  p.setCategory(categoryEntity(r.categoryId()));
+  if(!erp){var category=categoryEntity(r.categoryId());legacyCategory(category);p.setCategory(category);}
   p.setName(r.name());
   p.setSlug(r.slug());
   p.setShortDescription(r.shortDescription());
@@ -84,19 +96,19 @@ public class AdminCatalogService {
  public List<OptionView> materials(String pid){entity(pid);return em.createQuery("select x from ProductMaterial x where x.product.id=:pid order by x.displayOrder,x.id",ProductMaterial.class).setParameter("pid",pid).getResultList().stream().map(x->new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder())).toList();}
  private ProductMaterial materialsEntity(String pid,String id){return em.createQuery("select x from ProductMaterial x where x.product.id=:pid and x.id=:id",ProductMaterial.class).setParameter("pid",pid).setParameter("id",id).getResultStream().findFirst().orElseThrow(this::missing);}
  @Transactional public OptionView savematerials(String pid,String id,OptionInput r){
-  var p=entity(pid);var x=id==null?new ProductMaterial():materialsEntity(pid,id);if(id==null){x.setId(id());x.setProduct(p);}
+  var p=entity(pid);legacyTechnical(p);var x=id==null?new ProductMaterial():materialsEntity(pid,id);if(id==null){x.setId(id());x.setProduct(p);}
   String name=r.name().trim();if(name.codePoints().noneMatch(Character::isLetterOrDigit))throw new AdminFailure(400,"El nombre del material debe incluir al menos una letra o numero");
   x.setName(name);x.setActive(r.active());x.setDisplayOrder(r.displayOrder());if(id==null)em.persist(x);em.flush();return new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder());
  }
- @Transactional public void deleteMaterial(String pid,String id){entity(pid);var x=materialsEntity(pid,id);em.remove(x);em.flush();}
- @Transactional public OptionView activematerials(String pid,String id,boolean value){var x=materialsEntity(pid,id);x.setActive(value);return new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder());}
+ @Transactional public void deleteMaterial(String pid,String id){legacyTechnical(entity(pid));var x=materialsEntity(pid,id);em.remove(x);em.flush();}
+ @Transactional public OptionView activematerials(String pid,String id,boolean value){legacyTechnical(entity(pid));var x=materialsEntity(pid,id);x.setActive(value);return new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder());}
  public List<OptionView> extras(String pid){entity(pid);return em.createQuery("select x from ProductExtra x where x.product.id=:pid order by x.displayOrder,x.id",ProductExtra.class).setParameter("pid",pid).getResultList().stream().map(x->new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder())).toList();}
  private ProductExtra extrasEntity(String pid,String id){return em.createQuery("select x from ProductExtra x where x.product.id=:pid and x.id=:id",ProductExtra.class).setParameter("pid",pid).setParameter("id",id).getResultStream().findFirst().orElseThrow(this::missing);}
  @Transactional public OptionView saveextras(String pid,String id,OptionInput r){
-  var p=entity(pid);var x=id==null?new ProductExtra():extrasEntity(pid,id);if(id==null){x.setId(id());x.setProduct(p);}
+  var p=entity(pid);legacyTechnical(p);var x=id==null?new ProductExtra():extrasEntity(pid,id);if(id==null){x.setId(id());x.setProduct(p);}
   x.setName(r.name().trim());x.setActive(r.active());x.setDisplayOrder(r.displayOrder());if(id==null)em.persist(x);em.flush();return new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder());
  }
- @Transactional public OptionView activeextras(String pid,String id,boolean value){var x=extrasEntity(pid,id);x.setActive(value);return new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder());}
+ @Transactional public OptionView activeextras(String pid,String id,boolean value){legacyTechnical(entity(pid));var x=extrasEntity(pid,id);x.setActive(value);return new OptionView(x.getId(),x.getName(),x.isActive(),x.getDisplayOrder());}
  private ImageView imageView(ProductImage x){return new ImageView(x.getId(),x.getUrl(),media.publicUrl(x.getUrl()),x.getAltText(),x.isPrimaryImage(),x.getDisplayOrder());}
  public List<ImageView> images(String pid){entity(pid);return em.createQuery("select x from ProductImage x where x.product.id=:pid and x.active=true order by x.displayOrder,x.id",ProductImage.class).setParameter("pid",pid).getResultList().stream().map(this::imageView).toList();}
  private ProductImage imageEntity(String pid,String id){return em.createQuery("select x from ProductImage x where x.product.id=:pid and x.id=:id and x.active=true",ProductImage.class).setParameter("pid",pid).setParameter("id",id).getResultStream().findFirst().orElseThrow(this::missing);}

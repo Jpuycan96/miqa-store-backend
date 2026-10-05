@@ -55,6 +55,7 @@ class ErpCatalogTest {
         order.verify(repository).trySyncLock();
         order.verify(repository).revisions();
         order.verify(repository).upsert(eq(item), any());
+        order.verify(repository).reconcile(item);
         order.verify(repository).success(any(), eq(1), eq(1), eq(0));
         order.verify(repository).status();
         order.verify(transactions).commit(any());
@@ -63,6 +64,7 @@ class ErpCatalogTest {
         when(repository.revisions()).thenReturn(Map.of("17", item.catalogRevision()));
         service.synchronize();
         verify(repository).seen(eq("17"), any());
+        verify(repository).reconcile(item);
         verify(repository, never()).upsert(any(), any());
         verify(repository).success(any(), eq(1), eq(0), eq(0));
     }
@@ -153,4 +155,17 @@ class ErpCatalogTest {
         assertThat(JsonMapper.builder().build().writeValueAsString(response.getBody()))
                 .doesNotContain(key, "apiKey", "X-ERP-Service-Key", "baseUrl");
     }
+    @Test void identicalSyncsAlwaysReconcileEditorialProjectionEvenWithZeroTechnicalChanges() {
+        when(repository.revisions()).thenReturn(Map.of("17", item.catalogRevision()));
+        service.synchronize(); service.synchronize();
+        verify(repository, times(2)).reconcile(item);
+        verify(repository, never()).upsert(any(), any());
+    }
+    @Test void editorialFailureRollsBackProjectionAndDoesNotMarkSuccess() {
+        doThrow(new IllegalStateException("synthetic editorial failure")).when(repository).reconcile(item);
+        assertThatThrownBy(service::synchronize).isInstanceOf(IllegalStateException.class);
+        verify(transactions).rollback(any());
+        verify(repository, never()).success(any(), anyInt(), anyInt(), anyInt());
+    }
+
 }

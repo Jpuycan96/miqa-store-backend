@@ -1,5 +1,12 @@
 # MIQA Store API
 
+## Cat?logo ERP y presentaci?n MIQA
+
+Categor?as y servicios p?blicos se proyectan autom?ticamente desde ERP. Cada servicio
+obtiene una ficha editorial UUID en borrador y un v?nculo can?nico; legacy se conserva
+para administraci?n e hist?ricos. Requiere V10 (no aplicada en esta entrega). Reglas,
+compatibilidad y l?mites vigentes en [ERP_CATALOG.md](ERP_CATALOG.md).
+
 ## Precios ERP desde MIQA backend - 2B.5
 
 Evaluacion publica segura y revalidacion de precios en solicitudes v2, sin formulas

@@ -10,7 +10,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.*;
 import static com.miqa.store.erp.ErpCatalogDtos.*;
 
-/** Explicit -Dtest=ErpCatalogPersistenceIT only AFTER manual V8 application in TEST.
+/** Explicit -Dtest=ErpCatalogPersistenceIT only AFTER manual V10 application in TEST.
  * No Boot/Flyway/DDL. Fixed TEST destination, synthetic fixtures, rollback after every test. */
 class ErpCatalogPersistenceIT {
     private Connection connection;

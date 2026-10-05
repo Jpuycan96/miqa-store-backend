@@ -52,6 +52,8 @@ public class ErpCatalogService {
                     changed++;
                 }
             }
+            // Also repairs missing editorial projections when catalogRevision is unchanged.
+            for (var service : services) repository.reconcile(service);
             int missing = 0;
             for (String id : previous.keySet()) missing += repository.missing(id, now);
             repository.success(now, services.size(), changed, missing);
@@ -68,6 +70,7 @@ public class ErpCatalogService {
         if (input == null || !ErpCatalogValidation.id(input.erpServiceId()) || input.active() == null)
             throw new AdminFailure(400, "Vinculo invalido");
         return Objects.requireNonNull(write.execute(transaction -> {
+            if (!repository.trySyncLock()) throw new AdminFailure(409, "Ya hay una sincronizacion en curso");
             if (!repository.lockProduct(productId)) throw new AdminFailure(404, "Producto no encontrado");
             if (!repository.serviceExists(input.erpServiceId())) throw new AdminFailure(404, "Servicio ERP no sincronizado");
             repository.bind(productId, input);

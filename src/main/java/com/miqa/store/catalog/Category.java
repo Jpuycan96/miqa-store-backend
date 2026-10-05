@@ -8,6 +8,8 @@ import org.hibernate.annotations.BatchSize;
 @BatchSize(size = 100)
 public class Category extends TimestampedEntity {
     @Id @Column(length = 64) private String id;
+    @Column(length = 64) private String erpCategoryId;
+    public String getErpCategoryId() { return erpCategoryId; }
     @Column(nullable = false, length = 160) private String name;
     @Column(nullable = false, unique = true, length = 160) private String slug;
     @Column(columnDefinition = "text") private String description;

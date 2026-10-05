@@ -64,39 +64,9 @@ class QuoteCatalogTest {
         status(() -> QuoteCatalog.snapshot(product(PACK), new Item("p", PACK, 500, 50L, null, null, null, List.of(), null), null, List.of()), 409);
         status(() -> QuoteCatalog.snapshot(product(PACK), new Item("p", PACK, null, 50L, null, null, null, List.of(), null), null, List.of()), 400);
     }
-    @Test void queryRequiresPublishedProductAndActiveCategory() {
+    @Test void newLegacySubmissionsCannotBypassErpAuthority() {
         var jdbc = mock(JdbcTemplate.class);
         status(() -> new QuoteCatalog(jdbc).snapshot(item(QUANTITY)), 409);
-        verify(jdbc).query(contains("p.published AND c.active"), any(RowMapper.class), eq("p"));
-    }
-    @Test @SuppressWarnings("unchecked") void missingForeignOrInactiveOptionsAreRejectedByScopedActiveQuery() {
-        for (String table : List.of("product_materials", "product_extras")) {
-            var jdbc = mock(JdbcTemplate.class);
-            when(jdbc.query(contains("FROM products"), any(RowMapper.class), eq("p"))).thenReturn(List.of(product(QUANTITY)));
-            var item = new Item("p", QUANTITY, null, 50L, null, null, table.equals("product_materials") ? "bad" : null,
-                    table.equals("product_extras") ? List.of("bad") : List.of(), null);
-            status(() -> new QuoteCatalog(jdbc).snapshot(item), 409);
-            verify(jdbc).query(eq("SELECT id, name FROM " + table + " WHERE product_id = ? AND id = ? AND active"), any(RowMapper.class), eq("p"), eq("bad"));
-        }
-    }
-    @Test @SuppressWarnings("unchecked") void officialOptionValuesPopulateSnapshot() {
-        var jdbc = mock(JdbcTemplate.class);
-        when(jdbc.query(contains("FROM products"), any(RowMapper.class), eq("p"))).thenReturn(List.of(product(QUANTITY)));
-        when(jdbc.query(contains("FROM product_materials"), any(RowMapper.class), eq("p"), eq("m"))).thenReturn(List.of(new QuoteSnapshot.Option("m", "Oficial M")));
-        when(jdbc.query(contains("FROM product_extras"), any(RowMapper.class), eq("p"), eq("e"))).thenReturn(List.of(new QuoteSnapshot.Option("e", "Oficial E")));
-        var snapshot = new QuoteCatalog(jdbc).snapshot(new Item("p", QUANTITY, null, 50L, null, null, "m", List.of("e"), null));
-        assertThat(snapshot.material().name()).isEqualTo("Oficial M");
-        assertThat(snapshot.extras().getFirst().name()).isEqualTo("Oficial E");
-    }
-    @Test @SuppressWarnings("unchecked") void activeMaterialsRequireSelectionAsInExistingFrontend() {
-        var jdbc = mock(JdbcTemplate.class);
-        when(jdbc.query(contains("FROM products"), any(RowMapper.class), eq("p"))).thenReturn(List.of(product(QUANTITY)));
-        when(jdbc.queryForObject(contains("FROM product_materials"), eq(Boolean.class), eq("p"))).thenReturn(true);
-        status(() -> new QuoteCatalog(jdbc).snapshot(item(QUANTITY)), 400);
-    }
-    @Test void boundProductCannotBypassConfigurationThroughPhaseOne() {
-        var jdbc = mock(JdbcTemplate.class);
-        when(jdbc.queryForObject(contains("FROM product_erp_bindings"), eq(Boolean.class), eq("p"))).thenReturn(true);
-        status(() -> new QuoteCatalog(jdbc).snapshot(item(QUANTITY)), 409);
+        verifyNoInteractions(jdbc);
     }
 }

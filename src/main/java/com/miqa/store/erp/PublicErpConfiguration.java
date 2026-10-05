@@ -20,32 +20,40 @@ public class PublicErpConfiguration {
     private final ObjectMapper mapper;
     public PublicErpConfiguration(JdbcTemplate jdbc, ObjectMapper mapper) { this.jdbc = jdbc; this.mapper = mapper; }
 
+    private static final String PUBLIC_ROWS = """
+            SELECT p.id, p.name, p.slug, s.erp_service_id, c.erp_category_id, s.payload::text AS payload
+            FROM products p JOIN categories c ON c.id = p.category_id
+            JOIN product_erp_bindings b ON b.product_id = p.id
+            JOIN erp_catalog_services s ON s.erp_service_id = b.erp_service_id
+            WHERE p.published AND c.active AND p.catalog_mode = 'ERP'
+                AND c.erp_category_id IS NOT NULL AND b.canonical AND b.active AND s.sync_state = 'AVAILABLE'
+            """;
+
     public Configuration configuration(String productId) { return resolve(productId).publicConfiguration(); }
+    public Set<String> visibleProductIds() {
+        var ids = new LinkedHashSet<String>();
+        for (var row : jdbc.query(PUBLIC_ROWS, this::publicRow)) if (row.contract() != null) ids.add(row.productId());
+        return ids;
+    }
     public Resolved resolve(String productId) {
-        var rows = jdbc.query("""
-                SELECT p.id, p.name, p.slug, b.product_id AS bound_product, b.active, s.erp_service_id,
-                       s.sync_state, s.payload::text AS payload
-                FROM products p JOIN categories c ON c.id = p.category_id
-                LEFT JOIN product_erp_bindings b ON b.product_id = p.id
-                LEFT JOIN erp_catalog_services s ON s.erp_service_id = b.erp_service_id
-                WHERE p.id = ? AND p.published AND c.active
-                """, (rs, row) -> {
-            Configuration config = Configuration.state(rs.getString("bound_product") == null ? "LEGACY" : "UNAVAILABLE");
-            ErpCatalogContract contract = null;
-            if (rs.getBoolean("active") && "AVAILABLE".equals(rs.getString("sync_state"))) {
-                try {
-                    var candidate = mapper.readValue(rs.getString("payload"), ErpCatalogContract.class);
-                    if (Objects.equals(candidate.erpServiceId(), rs.getString("erp_service_id")) && supported(candidate)) {
-                        contract = candidate;
-                        config = new Configuration("ERP", contract.erpServiceId(), contract.catalogRevision(),
-                                contract.configurationVersion(), contract.configuracion());
-                    }
-                } catch (RuntimeException ignored) { /* Corrupt/unsupported projection fails closed. */ }
+        return jdbc.query(PUBLIC_ROWS + " AND p.id = ?", this::publicRow, productId).stream()
+                .filter(row -> row.contract() != null).findFirst()
+                .orElseThrow(() -> new CatalogNotFoundException("Producto no disponible"));
+    }
+    private Resolved publicRow(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
+        ErpCatalogContract contract = null;
+        Configuration config = Configuration.state("UNAVAILABLE");
+        try {
+            var candidate = mapper.readValue(rs.getString("payload"), ErpCatalogContract.class);
+            if (Objects.equals(candidate.erpServiceId(), rs.getString("erp_service_id"))
+                    && supported(candidate)
+                    && Objects.equals(candidate.categoria().erpCategoryId(), rs.getString("erp_category_id"))) {
+                contract = candidate;
+                config = new Configuration("ERP", contract.erpServiceId(), contract.catalogRevision(),
+                        contract.configurationVersion(), contract.configuracion());
             }
-            return new Resolved(rs.getString("id"), rs.getString("name"), rs.getString("slug"), config, contract);
-        }, productId);
-        if (rows.isEmpty()) throw new CatalogNotFoundException("Producto no disponible");
-        return rows.getFirst();
+        } catch (RuntimeException ignored) { /* Unsupported projections never become public. */ }
+        return new Resolved(rs.getString("id"), rs.getString("name"), rs.getString("slug"), config, contract);
     }
 
     public static boolean supported(ErpCatalogContract contract) {

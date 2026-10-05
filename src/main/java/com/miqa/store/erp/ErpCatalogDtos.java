@@ -12,5 +12,10 @@ public final class ErpCatalogDtos {
     public record BindingInput(@NotBlank @Size(max = 64) @Pattern(regexp = "[1-9][0-9]*") String erpServiceId,
                                @NotNull Boolean active) {}
     public record ProductErpBinding(String productId, String erpServiceId, boolean active, String state,
-                                   Instant createdAt, Instant updatedAt, Instant lastSyncedAt) {}
+                                   Instant createdAt, Instant updatedAt, Instant lastSyncedAt, boolean canonical) {
+        public ProductErpBinding(String productId, String erpServiceId, boolean active, String state,
+                Instant createdAt, Instant updatedAt, Instant lastSyncedAt) {
+            this(productId, erpServiceId, active, state, createdAt, updatedAt, lastSyncedAt, false);
+        }
+    }
 }

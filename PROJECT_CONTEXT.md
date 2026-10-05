@@ -1,5 +1,18 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Cat?logo estructural ERP y ficha editorial autom?tica ? 4 de octubre de 2026
+
+- Inicio: main limpio. ERP solo le?do para confirmar categoria.erpCategoryId; frontend intacto. Sin commit/staging/push/merge/deploy/cambio de rama ni acceso DEV/PROD.
+- V10 nueva, NO aplicada: identidad ERP de categor?a ?nica, Product LEGACY/ERP y binding can?nico con ?ndice ?nico parcial independiente de active. V1?V9 intactas; sin borrado/reparaci?n de legacy, Banner ni hist?ricos.
+- Sync JDBC at?mica crea categor?as y fichas UUID en borrador; reconcilia incluso revisi?n igual. Nunca adopta bindings previos por identidad editorial o semejanza: crea principal nuevo si falta, conserva todos los hist?ricos. Slugs estables y colisiones con sufijos; bloqueo com?n con escritores admin. ERP mueve la relaci?n de categor?a; no reescribe presentaci?n. Product DynamicUpdate evita sobrescribir categor?a por un cambio editorial concurrente.
+- P?blico exclusivamente ERP can?nico, activo, AVAILABLE, soportado y publicado editorialmente; categor?as derivadas de fichas visibles. Baja/reaparici?n conserva todo. Admin protege estructura/t?cnica, conserva presentaci?n. Campos t?cnicos legacy nulos en ERP; DTO suma catalogMode/canonical/erpCategoryId seg?n recurso. Sin tarifas locales. Contrato y transici?n en ERP_CATALOG.md.
+- Nuevos env?os legacy rechazados 409; replay confirmado v1/v2, snapshots y exportaciones intactos. Tests HTTP antiguos adaptados a la nueva pol?tica; integraci?n PostgreSQL nueva con fixtures sint?ticos/rollback preparada. V10/Flyway, restricciones SQL y HTTP con PostgreSQL pendientes por ausencia de TEST_DB_PASSWORD; no se busc? el secreto.
+- Validaci?n inicial: 28 pruebas focalizadas; ampliaci?n 36; regresi?n Java 21/Maven Wrapper offline: 147 tests, 0 fallos/errores, 2 omisiones POSIX preexistentes. Una selecci?n intermedia por wildcard incluy? accidentalmente QuoteRequestApiTest: 14 errores de arranque por autenticaci?n TEST sin credencial, sin conexi?n obtenida ni migraciones. Se interrumpi? y corrigi? con exclusiones expl?citas.
+- Comando de regresi?n: `./mvnw.cmd -o -f .tmp/erp-editorial-build/pom.xml '-Dtest=*Test,!AdminApiTest,!CatalogApiTest,!QuoteRequestApiTest,!ProductionAdminBootstrapTest' test`. POM temporal ignorado usa fuentes/recursos originales y salida aislada del editor; pom.xml versionado intacto.
+- Cierre: 31 pruebas focalizadas finales aprobadas tras dos casos nuevos de sync y exposici?n de identidad de categor?a en admin. `-DskipTests package` BUILD SUCCESS, compila tambi?n las pruebas IT; artefacto `.tmp/erp-editorial-build/target/miqa-store-backend-0.0.1-SNAPSHOT.jar`. `git diff --check` correcto; sin ejecuci?n real de Flyway.
+- Limitaciones: sync manual sin TTL/scheduler, listado sin paginaci?n, categor?as vac?as no disponibles en contrato ERP, frontend no adaptado a edici?n ERP con campos t?cnicos nulos. El primer despliegue requiere migraci?n + sync + aprobaci?n editorial; legacy deja de ser p?blico por dise?o.
+
+
 ## Correccion del bean de seguridad de exportacion
 
 - Sobre c1f89cf, se renombro unicamente el metodo @Bean a requestExportSecurityFilterChain: el nombre anterior requestExportSecurity colisionaba con el componente @Configuration descubierto por scanning. Seguridad, propiedades y permisos intactos; overriding no habilitado.

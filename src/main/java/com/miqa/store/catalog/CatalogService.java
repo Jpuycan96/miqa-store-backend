@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Locale;
 
 @Service
-@Transactional(readOnly = true)
+@Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
 public class CatalogService {
     private final CategoryRepository categories;
     private final CategorySlugAliasRepository categoryAliases;
@@ -27,14 +27,20 @@ public class CatalogService {
         this.configurations = configurations;
     }
     public List<CategoryDto> categories() {
-        return categories.findByActiveTrueOrderByDisplayOrderAscIdAsc().stream().map(this::categoryDto).toList();
+        var visible = configurations.visibleProductIds();
+        var categoryIds = products.findAllById(visible).stream().map(p -> p.getCategory().getId()).collect(java.util.stream.Collectors.toSet());
+        return categories.findByActiveTrueOrderByDisplayOrderAscIdAsc().stream()
+                .filter(c -> c.getErpCategoryId() != null && categoryIds.contains(c.getId())).map(this::categoryDto).toList();
     }
     public List<CategorySlugRedirectDto> categorySlugRedirects() {
-        return categoryAliases.findPublicRedirects().stream()
+        var visible = categories().stream().map(CategoryDto::id).collect(java.util.stream.Collectors.toSet());
+        return categoryAliases.findPublicRedirects().stream().filter(a -> visible.contains(a.getCategory().getId()))
                 .map(alias -> new CategorySlugRedirectDto(alias.getSlug(), alias.getCategory().getSlug())).toList();
     }
     public List<ProductDto> products(String category, String search, Boolean featured) {
-        Specification<Product> specification = (root, query, cb) -> cb.and(
+        var visible = configurations.visibleProductIds();
+        if (visible.isEmpty()) return List.of();
+        Specification<Product> specification = (root, query, cb) -> cb.and(root.get("id").in(visible),
                 cb.isTrue(root.get("published")), cb.isTrue(root.get("category").get("active")));
         if (category != null && !category.isBlank()) specification = specification.and(
                 (root, query, cb) -> cb.equal(root.get("category").get("slug"), category.trim()));
@@ -51,7 +57,7 @@ public class CatalogService {
     }
     private CategoryDto categoryDto(Category category) {
         return new CategoryDto(category.getId(), category.getName(), category.getSlug(), category.getDescription(),
-                category.getCatalogHeadline(), category.getCatalogDescription(), category.getDisplayOrder());
+                category.getCatalogHeadline(), category.getCatalogDescription(), category.getDisplayOrder(), category.getErpCategoryId());
     }
     private ProductDto productDto(Product product) {
         var images = product.getImages().stream().filter(ProductImage::isActive).map(image -> new ImageDto(image.getId(), media.publicUrl(image.getUrl()), image.getAltText(), image.isPrimaryImage(), image.getDisplayOrder())).toList();
@@ -61,8 +67,7 @@ public class CatalogService {
                 images.stream().filter(image -> !image.url().equals(primary)).map(ImageDto::url).toList(), images,
                 product.isFeatured(), product.isPublished(), product.getSaleType(), product.getUnitLabel(), product.getPackSize(), product.getPackLabel(),
                 product.getMinQuantity(), product.getQuantityStep(),
-                product.getMaterials().stream().filter(ProductMaterial::isActive).map(option -> new OptionDto(option.getId(), option.getName())).toList(),
-                product.getExtras().stream().filter(ProductExtra::isActive).map(option -> new OptionDto(option.getId(), option.getName())).toList(),
+                List.of(), List.of(),
                 configurations.configuration(product.getId()));
     }
 }

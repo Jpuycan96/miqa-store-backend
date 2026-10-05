@@ -6,16 +6,20 @@ import java.util.List;
 import org.hibernate.annotations.BatchSize;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(name = "products")
 public class Product extends TimestampedEntity {
     @Id @Column(length = 64) private String id;
+    @Column(nullable = false, length = 16) private String catalogMode = "LEGACY";
+    public String getCatalogMode() { return catalogMode; }
+    public void setCatalogMode(String value) { catalogMode = value; }
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "category_id", nullable = false) private Category category;
     @Column(nullable = false, length = 200) private String name;
     @Column(nullable = false, unique = true, length = 160) private String slug;
     @Column(nullable = false, length = 500) private String shortDescription;
     @Column(nullable = false, columnDefinition = "text") private String description;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private ProductSaleType saleType;
-    @Column(nullable = false, length = 40) private String unitLabel;
+    @Enumerated(EnumType.STRING) @Column(length = 16) private ProductSaleType saleType;
+    @Column(length = 40) private String unitLabel;
     private Integer packSize;
     @Column(length = 40) private String packLabel;
     private Integer minQuantity;

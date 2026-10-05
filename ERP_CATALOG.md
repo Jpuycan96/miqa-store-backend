@@ -1,3 +1,58 @@
+# Cat?logo estructural ERP y fichas editoriales MIQA ? 4 de octubre de 2026
+
+Esta secci?n reemplaza las reglas hist?ricas de publicaci?n descritas m?s abajo.
+ERP gobierna categor?as, relaci?n categor?a/servicio, configuraci?n y pricing; MIQA
+conserva presentaci?n y aprobaci?n editorial. No hay cambios al contrato ERP ni al frontend.
+
+- El contrato v1 incluye `categoria.erpCategoryId` y `nombreReferencia`. Se proyecta
+  en `categories.erp_category_id` (?nico), con ID local UUID y slug estable. No se
+  asocia por nombre. Se rechazan categor?as ausentes/inconsistentes en el mismo lote.
+  El endpoint solo enumera servicios disponibles: no se inventan categor?as vac?as.
+- V10 agrega `products.catalog_mode` (LEGACY/ERP), `bindings.canonical` y unicidad
+  parcial del servicio can?nico, incluso desactivado. Los campos t?cnicos legacy
+  son nulos para ERP; permanecen obligatorios donde corresponde para LEGACY.
+  V1?V9, filas legacy y snapshots no se modifican. V10 todav?a NO aplicada.
+- Toda sync v?lida reconcilia fichas, incluso sin cambio de catalogRevision. Una
+  principal existente conserva identidad, slug y contenido; solo cambia su categor?a
+  si ERP cambia la relaci?n. Sin principal se crea otra ficha con UUID, t?tulo inicial
+  ERP, textos vac?os y published=false. Los bindings hist?ricos no se promueven ni
+  se reutilizan: se conservan no can?nicos, aunque exista uno solo. Esto implica una
+  nueva ficha en borrador para servicios antes vinculados manualmente.
+- Slug inicial normalizado, m?ximo 160, con sufijos num?ricos ante colisiones con
+  productos, categor?as o aliases de categor?a. Sync nunca renombra URLs existentes.
+  Escrituras de slugs admin/sync comparten advisory lock; sync/bind tambi?n se serializan.
+  El ?ndice parcial es la garant?a final de unicidad principal. La identidad can?nica
+  no puede reasignarse por el PUT de binding; active s? puede cambiarse.
+- P?blico exige modo ERP, publicaci?n editorial, categor?a ERP activa, binding
+  can?nico activo, proyecci?n AVAILABLE, identidad de categor?a coincidente y contrato
+  elegible/disponible/soportado. Listado, detalle, pricing y solicitudes v2 comparten
+  resoluci?n. Categor?as y aliases p?blicos requieren alguna ficha visible. Ausencias
+  ERP retiran fichas/navegaci?n sin DELETE; reaparici?n reutiliza identidad y respeta
+  despublicaci?n/binding desactivado. Errores de red no equivalen a lista vac?a.
+- Admin expone catalogMode, canonical y erpCategoryId. Permite t?tulo comercial,
+  textos, im?genes, SEO, destacado, orden, slug y publicaci?n del producto ERP.
+  Rechaza editar categor?a/tipo/unidad/packs/cantidades/materiales/extras t?cnicos.
+  PUT editorial ERP debe reenviar categoryId actual y campos t?cnicos nulos.
+  Estructura de categor?as ERP es de solo lectura. El t?tulo comercial se inicializa
+  una vez; cambios del nombre t?cnico siguen en el payload ERP, sin sobrescribirlo.
+- DTO p?blico conserva campos legacy con null y materiales/extras vac?os; configuraci?n
+  ERP contin?a en configuration. No se calcula ni persiste una tarifa local. El frontend
+  no fue adaptado: formularios antiguos que obliguen campos t?cnicos requerir?n ajuste.
+- Legacy permanece administrable e hist?rico, pero no p?blico. Nuevos env?os legacy
+  (v1 o items legacy de v2) devuelven 409. Reintentos confirmados se recuperan antes
+  de consultar cat?logo/ERP; snapshots y exportaci?n hist?rica permanecen intactos.
+- received/changed/missing siguen midiendo la proyecci?n t?cnica, no altas editoriales.
+  Sync manual, sin scheduler/TTL: la disponibilidad refleja el ?ltimo ?xito, no una
+  garant?a de actualizaci?n instant?nea. Listados siguen sin paginaci?n.
+
+Validaci?n PostgreSQL pendiente: aplicar V10 ?nicamente en TEST de forma controlada
+antes de ejecutar `ErpEditorialPersistenceIT` / `ErpCatalogPersistenceIT`. Usan destino
+fijo TEST, fixtures sint?ticos y rollback; no ejecutan Flyway ni HTTP ERP. Las pruebas
+HTTP actualizadas necesitan TEST con V10. La validaci?n ejecutada se registra en
+PROJECT_CONTEXT.md. No se busc? ninguna credencial ni se accedi? a DEV/PROD.
+
+---
+
 # Fase 2B.2: proyección local ERP
 
 Actualización 2B.4 (30/09/2026): la proyección ahora alimenta la configuración pública
