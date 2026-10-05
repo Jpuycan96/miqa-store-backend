@@ -142,11 +142,20 @@ class QuoteRequestApiTest {
         assertThat(requestCount()).isZero();
     }
     @Test void invalidDimensionsQuantityAndStalePresentationAreRejected() throws Exception {
-        for (Object width : Arrays.asList(null, 0, -1, 0.009, 1001)) {
+        // Structurally valid legacy submissions reach the obsolete-catalog rejection.
+        for (String dimension : List.of("widthMeters", "heightMeters")) {
+            var item = area(); item.put(dimension, null);
+            assertThat(post(key(), body(item)).statusCode()).isEqualTo(409);
+        }
+        var belowLegacyMinimum = item("qrt-quantity", "QUANTITY"); belowLegacyMinimum.put("quantity", 11);
+        assertThat(post(key(), body(belowLegacyMinimum)).statusCode()).isEqualTo(409);
+
+        // Invalid DTO values are rejected before catalog validation.
+        for (Object width : List.of(0, -1, 0.009, 1001)) {
             var item = area(); item.put("widthMeters", width);
             assertThat(post(key(), body(item)).statusCode()).isEqualTo(400);
         }
-        for (Object quantity : List.of(0, 11, 12.5, "50", 1_000_000_001L)) {
+        for (Object quantity : List.of(0, 12.5, "50", 1_000_000_001L)) {
             var item = item("qrt-quantity", "QUANTITY"); item.put("quantity", quantity);
             assertThat(post(key(), body(item)).statusCode()).isEqualTo(400);
         }
