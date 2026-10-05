@@ -34,6 +34,7 @@ class ErpCatalogTest {
         when(transactions.getTransaction(any())).thenAnswer(i -> new SimpleTransactionStatus(true));
         when(repository.trySyncLock()).thenReturn(true);
         when(repository.revisions()).thenReturn(Map.of());
+        when(repository.configurationVersions()).thenReturn(Map.of("17", item.configurationVersion()));
         when(repository.status()).thenReturn(new SyncStatus("SUCCESS", Instant.now(), Instant.now(), 1, 1, 0));
         when(client.fetchAvailable()).thenReturn(List.of(item));
         service = new ErpCatalogService(client, repository, transactions);
@@ -166,6 +167,22 @@ class ErpCatalogTest {
         assertThatThrownBy(service::synchronize).isInstanceOf(IllegalStateException.class);
         verify(transactions).rollback(any());
         verify(repository, never()).success(any(), anyInt(), anyInt(), anyInt());
+    }
+
+    @Test void unchangedHashWithChangedConfigurationVersionReplacesPayload() {
+        when(repository.revisions()).thenReturn(Map.of("17", item.catalogRevision()));
+        when(repository.configurationVersions()).thenReturn(Map.of("17", "0"));
+        service.synchronize();
+        verify(repository).upsert(eq(item), any());
+        verify(repository, never()).seen(any(), any());
+        verify(repository).success(any(), eq(1), eq(1), eq(0));
+    }
+    @Test void missingStoredConfigurationVersionIsRepairedByResynchronization() {
+        when(repository.revisions()).thenReturn(Map.of("17", item.catalogRevision()));
+        when(repository.configurationVersions()).thenReturn(Map.of());
+        service.synchronize();
+        verify(repository).upsert(eq(item), any());
+        verify(repository, never()).seen(any(), any());
     }
 
 }

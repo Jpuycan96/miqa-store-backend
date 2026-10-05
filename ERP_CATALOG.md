@@ -128,7 +128,7 @@ Estados del vínculo: `AVAILABLE`, `PENDING_REVALIDATION`, `DISABLED`.
 
 POST devuelve 200 SUCCESS; 502 ERP_ERROR/INVALID_CONTRACT; 503 NOT_CONFIGURED;
 409 si otra sincronización está en curso. GET de estado inicial devuelve NEVER.
-`received` cuenta servicios recibidos; `changed` inserciones/revisiones distintas;
+`received` cuenta servicios recibidos; `changed` inserciones o cambios de catalogRevision/configurationVersion;
 `missing` servicios marcados pendientes por primera vez en ese intento.
 Un fallo ERP conserva succeededAt anterior y pone los contadores del intento a cero.
 
@@ -140,9 +140,10 @@ Un fallo ERP conserva succeededAt anterior y pone los contadores del intento a c
    inspeccionado. Rechaza JSON incompleto, trailing tokens, campos desconocidos,
    versión/origen no soportados, IDs duplicados y entradas incompletas/no disponibles.
    Valida estructura, no calcula tarifas ni reemplaza reglas comerciales del ERP.
-3. Solo tras validar toda la lista inserta/actualiza por ID estable. Una revisión igual
-   conserva JSONB, configurationVersion y evaluatedAt del último contenido guardado;
-   únicamente refresca lastSyncedAt y restaura AVAILABLE si estaba pendiente.
+3. Solo tras validar toda la lista inserta/actualiza por ID estable. Se comparan
+   catalogRevision y configurationVersion: solo si ambas coinciden conserva JSONB
+   y evaluatedAt, refresca lastSyncedAt y restaura AVAILABLE. Si cualquiera cambia,
+   reemplaza el payload completo, incluso con el mismo catalogRevision.
 4. Los IDs conocidos ausentes quedan PENDING_REVALIDATION, sin borrado ni pérdida de
    payload/vínculos. lastSyncedAt conserva la última vez que fueron vistos disponibles.
    Un array vacío válido sí reconcilia todos; un error o cuerpo inválido no reconcilia nada.
@@ -180,3 +181,59 @@ mvn -o '-Dtest=ErpCatalogPersistenceIT' test
 No ejecutar `mvn test` completo durante esta fase: los tests integrados históricos
 inician Flyway. Falta validación real PostgreSQL de V8 y prueba contra ERP DEV;
 no se ha abierto conexión a ninguna base ni al ERP durante la implementación.
+
+## Correccion de versiones de configuracion - 5 de octubre de 2026
+
+La captura real aportada por el propietario confirma HTTP ERP 200 PRECIO_DISPONIBLE
+con catalogRevision igual, pero configurationVersion enviada por MIQA 0 y devuelta
+por ERP 1. El 409 publico lo genera correctamente ErpPricing al comparar versiones.
+
+Origen de los valores: ERP lee servicio_tienda_virtual_configuracion.version (campo
+JPA @Version); CatalogoIntegracionPolicy lo exporta como string para catalogo y precio.
+Su canonical de catalogRevision incluye reglas tecnicas pero excluye c.version.
+Por ello el contador puede cambiar sin modificar el hash. Sin configuracion web,
+la policy exporta version null y no habilita una configuracion publica; el codigo
+inspeccionado no deriva un default de version 0 para esos servicios.
+
+MIQA decode/upsert conserva literalmente configurationVersion en el JSONB.
+PublicErpConfiguration lo lee de payload; PricingService y ErpQuoteSelection lo
+copian al snapshot, y ErpPricing al request. No hay default 0 en esta cadena.
+El fallo era la decision de sincronizacion basada SOLO en catalogRevision:
+repository.seen no reemplazaba payload y congelaba el contador previamente recibido.
+
+La sincronizacion corregida compara ademas la version guardada en el payload.
+Version distinta o ausente fuerza upsert autoritativo, conserva identificadores,
+fichas editoriales/vinculos y cuenta changed. Sin migracion ni reparacion SQL manual.
+Para servicios ya sincronizados con 0, una nueva sincronizacion DESPUES de instalar
+el fix actualiza el payload a la version vigente exportada por ERP, sin forzar 1.
+Si el endpoint ERP de catalogo realmente devuelve aun 0, no se inventa otro valor:
+habria que investigar ese contrato; este fix solo persiste lo recibido.
+
+Las protecciones de ErpPricing y ErpQuoteSelection permanecen. Carritos con version
+anterior deben actualizar opciones; snapshots historicos ya persistidos no se
+reescriben. Recargar la ficha tras sincronizar obtiene la version actual.
+
+Regresion local: JDBC/ERP simulados con codigo real de sync, JSONB serializado,
+PublicErpConfiguration, PricingService y ErpPricing. Payload version 0 + hash igual,
+ERP precio version 1 produce STALE antes; sync persiste version 1 y request sale
+con 1, obtiene PRICE_AVAILABLE; segunda sync no reescribe; nuevo mismatch 1/2
+sigue rechazado. IDs de fixture arbitrarios, no logica por producto.
+
+Prueba manual local minima (Java 21, desde backend; no necesita BD/ERP):
+
+```powershell
+.\mvnw.cmd '-Dtest=ErpCatalogTest,ErpConfigurationVersionRegressionTest,PublicErpConfigurationTest,ErpPricingTest,PricingServiceTest' test
+```
+
+En el entorno del agente se uso Maven instalado offline y POM de salida aislada
+.tmp/erp-configuration-version-build/pom.xml, con las mismas fuentes/recursos:
+
+```powershell
+$env:JAVA_HOME = (Resolve-Path '.tmp/jdk21/jdk-21.0.12.1+1').Path
+& 'C:/apache-maven-3.9.9/bin/mvn.cmd' -o '-Dmaven.repo.local=C:/Users/Jhairth Manuel/.m2/repository' -f .tmp/erp-configuration-version-build/pom.xml '-Dtest=ErpCatalogTest,ErpConfigurationVersionRegressionTest,PublicErpConfigurationTest,ErpPricingTest,PricingServiceTest' package
+```
+
+29 tests focalizados aprobados, cero fallos/errores/omisiones; package BUILD SUCCESS.
+Sin ejecucion PostgreSQL/Flyway/ERP reales ni contactos a produccion. Instrumentacion
+MIQA_PRICING_DIAGNOSTIC retirada con sus tests/documento exclusivamente temporales.
+Frontend pendiente intacto. Sin commit/push/deploy/cambio de rama.

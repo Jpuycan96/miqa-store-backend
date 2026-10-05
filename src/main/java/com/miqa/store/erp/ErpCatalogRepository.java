@@ -27,6 +27,13 @@ public class ErpCatalogRepository {
         return result;
     }
 
+    public Map<String, String> configurationVersions() {
+        var result = new LinkedHashMap<String, String>();
+        jdbc.query("SELECT erp_service_id, payload ->> 'configurationVersion' FROM erp_catalog_services",
+                (org.springframework.jdbc.core.RowCallbackHandler) rs -> result.put(rs.getString(1), rs.getString(2)));
+        return result;
+    }
+
     public void upsert(ErpCatalogContract service, Instant now) {
         jdbc.update("""
                 INSERT INTO erp_catalog_services(erp_service_id, catalog_revision, payload, sync_state, last_synced_at)

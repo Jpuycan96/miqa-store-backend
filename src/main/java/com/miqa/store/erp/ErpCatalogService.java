@@ -43,9 +43,11 @@ public class ErpCatalogService {
             }
             Instant now = Instant.now();
             var previous = new HashMap<>(repository.revisions());
+            var previousVersions = repository.configurationVersions();
             int changed = 0;
             for (var service : services) {
-                if (service.catalogRevision().equals(previous.remove(service.erpServiceId()))) {
+                if (service.catalogRevision().equals(previous.remove(service.erpServiceId()))
+                        && Objects.equals(service.configurationVersion(), previousVersions.get(service.erpServiceId()))) {
                     repository.seen(service.erpServiceId(), now);
                 } else {
                     repository.upsert(service, now);

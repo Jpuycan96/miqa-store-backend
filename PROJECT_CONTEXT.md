@@ -1,5 +1,31 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Correccion de configurationVersion en sincronizacion - 5 de octubre de 2026
+
+- Evidencia real aportada por el propietario, no llamada nueva a produccion: ERP devuelve PRICE_AVAILABLE/HTTP 200 con catalogRevision igual pero configurationVersion 1 mientras snapshot MIQA envia 0. El JAR diagnostico ya fue retirado de produccion por el propietario.
+- Causa MIQA: sync comparaba solo catalogRevision y repository.seen preservaba JSONB/configurationVersion anterior. ERP exporta c.version (campo JPA @Version); su hash canonical excluye el contador, por lo que version cambia sin cambiar hash. Decode/persistencia/publicacion/snapshot no aplican un default 0. ErpPricing rechaza correctamente el mismatch.
+- Fix generico: comparar tambien configurationVersion almacenada en payload; version distinta/ausente hace upsert completo. Ambas iguales mantienen freshness write y payload/evaluatedAt. Resync posterior al fix repara filas anteriores sin migracion ni SQL manual; solo usa la version exportada por ERP. Preservadas validaciones reales de obsolescencia, identidad editorial y snapshots historicos.
+- Regresion con JDBC/ERP simulados, pipeline real sync -> payload -> publico -> pricing: request 0/ERP 1 produce STALE antes; resync mismo hash guarda 1 y request 1 obtiene precio; siguiente sync es idempotente; mismatch posterior 1/2 sigue rechazado. 29 tests focalizados aprobados, package Java 21/Maven offline BUILD SUCCESS; sin BD/Flyway/ERP reales.
+- Retirada instrumentacion temporal ErpPricing y sus tests/documento; desaparece el flag. Conservado el PENDIENTE de retiro Legacy y cambios previos de contexto. Frontend y ERP sin modificaciones por esta tarea. Detalles/comandos locales en ERP_CATALOG.md. Sin commit/push/deploy/cambio de main ni acceso produccion.
+
+
+## PENDIENTE — Retiro de Legacy MIQA
+
+**NO ejecutar todavía.** Primero debe estabilizarse y validarse en producción el nuevo catálogo gobernado por ERP. Después, retirar de forma controlada el sistema Legacy de catálogo MIQA que ya no tenga función.
+
+La investigación previa deberá inventariar:
+
+- Código backend obsoleto y código frontend relacionado con Legacy.
+- Endpoints, DTOs, servicios y repositorios exclusivos del catálogo anterior.
+- Tablas, columnas y datos de BD sin uso; configuración técnica antigua en MIQA para categorías, materiales, modelos, medidas, precios, etc.
+- Compatibilidad temporal introducida durante la migración ERP, seeds y datos Legacy, tests del flujo retirado y documentación obsoleta.
+
+No borrar ni editar migraciones Flyway ya aplicadas. No eliminar datos históricos sin determinar antes si deben conservarse; preservar imágenes, información editorial e historial que todavía tengan valor.
+
+Antes de eliminar datos en producción, seguir: **inventario -> análisis de referencias -> backup -> migración formal de limpieza -> pruebas -> producción**. No hacer DROP ni DELETE manual improvisado en producción.
+
+Objetivo final: ERP como única autoridad de estructura/configuración técnica del catálogo; MIQA conserva únicamente la responsabilidad editorial/presentacional necesaria.
+
 ## Cat?logo estructural ERP y ficha editorial autom?tica ? 4 de octubre de 2026
 
 - Inicio: main limpio. ERP solo le?do para confirmar categoria.erpCategoryId; frontend intacto. Sin commit/staging/push/merge/deploy/cambio de rama ni acceso DEV/PROD.
