@@ -68,6 +68,6 @@ public class CatalogService {
                 product.isFeatured(), product.isPublished(), product.getSaleType(), product.getUnitLabel(), product.getPackSize(), product.getPackLabel(),
                 product.getMinQuantity(), product.getQuantityStep(),
                 List.of(), List.of(),
-                configurations.configuration(product.getId()));
+                configurations.configuration(product.getId()), product.getSeoTitle(), product.getSeoDescription());
     }
 }

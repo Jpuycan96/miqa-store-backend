@@ -14,5 +14,6 @@ public final class CatalogDtos {
             boolean featured, boolean published, ProductSaleType saleType, String unitLabel,
             Integer packSize, String packLabel, Integer minQuantity, Integer step,
             List<OptionDto> materials, List<OptionDto> extras,
-            com.miqa.store.erp.PublicErpConfiguration.Configuration configuration) {}
+            com.miqa.store.erp.PublicErpConfiguration.Configuration configuration,
+            String seoTitle, String seoDescription) {}
 }

@@ -1,5 +1,23 @@
 # MIQA Store API
 
+## SEO dinamico - etapa 1 local
+
+GET publico `/api/public/seo/sitemap.xml`: XML UTF-8 con el dominio canonico
+`https://store.solucionesmicaela.com`, Inicio, `/productos` y las URLs de categorias
+y productos devueltos por las consultas publicas actuales. Las categorias requieren
+productos elegibles; borradores, despublicados, categorias inactivas y configuraciones
+no elegibles siguen excluidos por las reglas existentes. Consultas en una transaccion
+de lectura REPEATABLE_READ, URLs unicas y escapadas, sin `lastmod` inventado.
+`Cache-Control: no-store`; un fallo de consulta/render devuelve 500 sin XML parcial.
+
+Los GET publicos de productos (lista y detalle) incluyen `seoTitle` y
+`seoDescription` tal como estan almacenados, incluidos null/vacio, sin cambiar
+publicacion ni reglas comerciales. No requiere migracion ni nuevas dependencias.
+
+Preparado exclusivamente en local: no conectado a `/sitemap.xml` del dominio ni
+a Cloudflare. El sitemap estatico del frontend, redirects y HTML prerenderizado
+siguen intactos. Esta etapa no resuelve SSR ni errores/redirecciones de paginas.
+
 ## Confiabilidad y recuperacion administrativa de webhooks ERP
 
 Deadline total del catalogo y recuperacion auditada/idempotente de eventos FAILED:
