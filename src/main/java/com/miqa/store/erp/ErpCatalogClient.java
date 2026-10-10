@@ -16,16 +16,25 @@ import java.util.concurrent.*;
 public class ErpCatalogClient {
     private final String baseUrl;
     private final String apiKey;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
-            .followRedirects(HttpClient.Redirect.NEVER).build();
+    private final HttpClient http;
+    private final Duration catalogDeadline;
     private final JsonMapper mapper = JsonMapper.builder()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ErpCatalogClient(@Value("${app.erp.base-url:${ERP_TIENDA_VIRTUAL_BASE_URL:}}") String baseUrl,
                             @Value("${app.erp.api-key:${ERP_TIENDA_VIRTUAL_API_KEY:}}") String apiKey) {
+        this(baseUrl, apiKey, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
+                .followRedirects(HttpClient.Redirect.NEVER).build(), Duration.ofSeconds(20));
+    }
+
+    ErpCatalogClient(String baseUrl, String apiKey, HttpClient http, Duration catalogDeadline) {
+        if (catalogDeadline.isNegative() || catalogDeadline.isZero()) throw new IllegalArgumentException("Invalid deadline");
         this.baseUrl = baseUrl;
         this.apiKey = apiKey;
+        this.http = http;
+        this.catalogDeadline = catalogDeadline;
     }
 
     public List<ErpCatalogContract> fetchAvailable() {
@@ -40,12 +49,21 @@ public class ErpCatalogClient {
             }
             var request = HttpRequest.newBuilder(URI.create(baseUrl.replaceAll("/+$", "")
                     + "/api/integracion/tienda-virtual/v1/servicios"))
-                    .timeout(Duration.ofSeconds(20)).header("Accept", "application/json")
+                    .timeout(catalogDeadline).header("Accept", "application/json")
                     .header("X-ERP-Service-Key", apiKey).GET().build();
-            var response = http.send(request, info -> info.statusCode() == 200
+            // sendAsync completes only after the subscriber has consumed the entire body.
+            // The independent monotonic deadline also covers stalled/error response bodies.
+            long deadline = System.nanoTime() + catalogDeadline.toNanos();
+            var pending = http.sendAsync(request, info -> info.statusCode() == 200
                     ? new LimitedBody() : HttpResponse.BodySubscribers.replacing(""));
-            if (response.statusCode() != 200) throw new ErpCatalogFailure("ERP_ERROR");
-            return decode(response.body());
+            try {
+                var response = pending.get(Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+                if (response.statusCode() != 200) throw new ErpCatalogFailure("ERP_ERROR");
+                return decode(response.body());
+            } finally {
+                // Cancels the HTTP exchange on timeout/interruption, releasing transport resources.
+                pending.cancel(true);
+            }
         } catch (ErpCatalogFailure ex) {
             throw ex;
         } catch (InterruptedException ex) {
