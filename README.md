@@ -1,5 +1,11 @@
 # MIQA Store API
 
+## Confiabilidad y recuperacion administrativa de webhooks ERP
+
+Deadline total del catalogo y recuperacion auditada/idempotente de eventos FAILED:
+[ERP_WEBHOOK_RECOVERY.md](ERP_WEBHOOK_RECOVERY.md). Requiere V12 pendiente de aplicar
+y validar en TEST; esta implementacion no activa webhooks ni ejecuta migraciones.
+
 ## Cat?logo ERP y presentaci?n MIQA
 
 Categor?as y servicios p?blicos se proyectan autom?ticamente desde ERP. Cada servicio
