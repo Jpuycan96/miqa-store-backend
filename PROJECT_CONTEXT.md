@@ -1,6 +1,28 @@
 # MIQA Store Backend — contexto de proyecto
 
-## SEO dinamico, etapa 1 exclusivamente local - 10 de octubre de 2026
+## SEO dinamico: estado actual de verificacion local
+
+Resultados confirmados por el propietario para esta entrega; esta actualizacion documental no vuelve a ejecutar pruebas ni builds:
+
+- Backend: 299 pruebas ejecutadas, 297 aprobadas, 0 fallos, 0 errores y 2 omitidas. Las omitidas no se contabilizan como aprobadas.
+- Angular: 284 pruebas aprobadas en la ultima ejecucion de su suite. Cloudflare Worker: 53 pruebas aprobadas.
+- Compilacion Angular exitosa; sitemap generado con 32 URLs y 33 rutas prerenderizadas. Estos resultados sustituyen como estado actual al build historico offline de 15 rutas con fixtures, que se conserva solo como evidencia de pruebas y no como artefacto para publicar.
+- Integracion backend-Worker verificada localmente. El Worker ya esta desarrollado y probado: consulta GET /api/public/seo/pages/{slug}, genera HTML SEO dinamico y coordina la transicion con Angular.
+- SeoPageService sustituye las imagenes HTTP del contrato SEO por https://store.solucionesmicaela.com/images/brand/logo-miqa3.png; conserva HTTPS y rutas relativas validas, sin cambiar el contrato JSON ni el catalogo general.
+- Los cambios nuevos de SEO dinamico todavia NO se han publicado. El sitemap dinamico existente ya estaba en produccion, segun el propietario; eso no acredita la publicacion de las nuevas paginas SEO.
+
+Los resultados y pendientes de las etapas anteriores se conservan como historial; prevalece este estado actual para la implementacion SEO. La integracion local no equivale a verificacion ni despliegue en produccion.
+
+## Historial: Resolución SEO de páginas, etapa 1 exclusivamente backend - 10 de octubre de 2026
+
+- Nuevo GET público `/api/public/seo/pages/{slug}` con `SeoPageController`, `SeoPageService` y DTO de presentación `SeoPageDtos`. Reutiliza exclusivamente `CatalogService` en transacción read-only REPEATABLE_READ: categoría pública primero, producto elegible después, alias de categoría solo tras ausencia del producto y si el destino sigue público. Errores internos no se convierten en ausencia/redirección. Slugs inválidos o de más de 160 caracteres también generan 404.
+- HTTP 200 con type PRODUCT/CATEGORY, name, slug, seoTitle, seoDescription, bodyDescription, image {url,altText}, breadcrumbs/links {name,url}, canonicalUrl. Dominio fijo del sitio, independiente de headers/query. Campos SEO editoriales y fórmulas actuales Angular preservados; categorías usan catalogDescription/fórmula de Trujillo porque no existen campos SEO propios. Cuerpo de categoría usa texto editorial o descripción pública. Imagen activa principal/orden y logo institucional de fallback. Links de categoría salen de productos públicos, sin duplicados/autorreferencia; DTO excluye IDs/configuración/datos privados ERP y administración.
+- 301 de alias con Location a página canónica del sitio y cuerpo vacío; 404 ApiError genérico para ausente/despublicado/no elegible/alias oculto; 500 ApiError sanitizado para fallo interno. 200/301/404/500 con Cache-Control no-store. HEAD sin cuerpo; POST rechazado y administración protegida. Security/CORS, CatalogService, DTO Product, sitemap, entidades, repositorios, properties, dependencias y migraciones existentes intactos. Sin historial de slugs de producto.
+- Validacion historica de etapa 1, Java 21/Maven 3.9.9 offline sobre POM original: 91 pruebas aprobadas, 0 fallos/errores/omisiones, package BUILD SUCCESS. SeoPageCatalogTest 13, SeoPageHttpTest 27 y 51 regresiones existentes de SEO/sitemap/elegibilidad/editorial/configuración/aislamiento. Contextos MVC con cadena real Spring Security y CatalogService real en tests de catálogo, repositorios/proyección simulados; no Boot/JDBC/Flyway ni conexiones a BD/ERP reales. Reportes `target/surefire-reports`, JAR `target/miqa-store-backend-0.0.1-SNAPSHOT.jar`, log ignorado `.tmp/seo-pages-package.log`. Acceso ampliado solo para Maven offline por lectura bloqueada de un JAR existente. Fallos iniciales corregidos en setup de mocks y prueba HEAD; resultado final aprobado.
+- Backend main inicialmente limpio; cambios locales sin staging/commit/push/deploy. Frontend/Worker/ERP/GoPrint intactos. Sin conexión a DEV/PROD, SQL, migraciones ni cambios de esquema/BD. README documenta contrato completo/errores y limitaciones.
+- Pendiente: pruebas reales HTTP/PostgreSQL requieren autorización independiente, medir consultas públicas sin paginación y disponibilidad de imágenes. Worker/HTML/hidratación/caché de páginas fuera de esta etapa; su futura consulta debe manejar redirects manuales para interpretar el 301 y escapar textos al renderizar. No se requiere modificación de base de datos.
+
+## Historial: SEO dinamico, etapa 1 exclusivamente local - 10 de octubre de 2026
 
 - GET publico `/api/public/seo/sitemap.xml`, XML UTF-8 y `Cache-Control: no-store`. Dominio fijo `https://store.solucionesmicaela.com`, Inicio, `/productos` y rutas `/productos/{slug}` de categorias/productos. Reutiliza `CatalogService.categories()` y `products(null, null, null)` en una transaccion read-only REPEATABLE_READ, sin duplicar reglas ni consultar ERP. Categorias activas con identidad ERP y productos elegibles; publicaciones, vinculos canonicos activos y contratos AVAILABLE/soportados siguen gobernados por las consultas publicas actuales. Categorias vacias/inactivas, borradores, despublicados y no elegibles quedan excluidos.
 - URLs deduplicadas entre productos/categorias, segmentos codificados y XML generado con StAX del JDK; sin `lastmod` inventado, metadatos privados ni datos tecnicos ERP. Fallos de consulta/render generan HTTP 500 sin cuerpo parcial, aun con Accept XML; logs solo con tipo de excepcion, sin mensajes/causas SQL. Catalogo publico legitimamente vacio conserva las dos URLs estaticas.

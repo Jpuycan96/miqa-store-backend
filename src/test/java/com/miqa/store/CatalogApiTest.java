@@ -146,7 +146,7 @@ class CatalogApiTest {
         }
     }
     @Test void flywayAppliedMigrationsAndAuthorityConstraintsAreEnforced() {
-        assertThat(jdbc.queryForObject("SELECT max(version::int) FROM flyway_schema_history WHERE success", Integer.class)).isEqualTo(10);
+        assertThat(jdbc.queryForObject("SELECT max(version::int) FROM flyway_schema_history WHERE success", Integer.class)).isEqualTo(12);
         assertThatThrownBy(() -> jdbc.update("UPDATE products SET sale_type='AREA' WHERE id='catalog-test-product-1'")).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("UPDATE product_erp_bindings SET erp_service_id='970000011' WHERE product_id='catalog-test-product-2'")).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("DELETE FROM categories WHERE id='catalog-test-category'")).isInstanceOf(DataIntegrityViolationException.class);

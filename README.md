@@ -1,5 +1,112 @@
 # MIQA Store API
 
+## SEO dinamico: estado actual de verificacion local
+
+Resultados confirmados por el propietario para esta entrega; esta actualizacion documental no vuelve a ejecutar pruebas ni builds:
+
+- Backend: 299 pruebas ejecutadas, 297 aprobadas, 0 fallos, 0 errores y 2 omitidas. Las omitidas no se contabilizan como aprobadas.
+- Angular: 284 pruebas aprobadas en la ultima ejecucion de su suite. Cloudflare Worker: 53 pruebas aprobadas.
+- Compilacion Angular exitosa; sitemap generado con 32 URLs y 33 rutas prerenderizadas. Estos resultados sustituyen como estado actual al build historico offline de 15 rutas con fixtures, que se conserva solo como evidencia de pruebas y no como artefacto para publicar.
+- Integracion backend-Worker verificada localmente. El Worker ya esta desarrollado y probado: consulta GET /api/public/seo/pages/{slug}, genera HTML SEO dinamico y coordina la transicion con Angular.
+- SeoPageService sustituye las imagenes HTTP del contrato SEO por https://store.solucionesmicaela.com/images/brand/logo-miqa3.png; conserva HTTPS y rutas relativas validas, sin cambiar el contrato JSON ni el catalogo general.
+- Los cambios nuevos de SEO dinamico todavia NO se han publicado. El sitemap dinamico existente ya estaba en produccion, segun el propietario; eso no acredita la publicacion de las nuevas paginas SEO.
+
+Los resultados y pendientes de las etapas anteriores se conservan como historial; prevalece este estado actual para la implementacion SEO. La integracion local no equivale a verificacion ni despliegue en produccion.
+
+## Resolución pública de páginas SEO - etapa 1 local, 10 de octubre de 2026
+
+`GET /api/public/seo/pages/{slug}` entrega el contrato al Worker desarrollado y probado localmente, sin
+generar HTML ni modificar el frontend. Slug de hasta 160 caracteres con el formato
+`[a-z0-9]+(?:-[a-z0-9]+)*`; formatos inválidos también devuelven 404. Solo lectura
+en una transacción REPEATABLE_READ. Reutiliza `CatalogService`: categoría pública
+primero, producto elegible después, y finalmente alias de categoría cuyo destino
+siga público. No consulta el ERP remoto ni añade reglas comerciales.
+
+HTTP 200, `Content-Type: application/json`, `Cache-Control: no-store`.
+Contrato completo de ejemplo (datos ilustrativos):
+
+```json
+{
+  "type": "PRODUCT",
+  "name": "Banner",
+  "slug": "banner",
+  "seoTitle": "Banner | MIQA",
+  "seoDescription": "Impresión de banners para tu proyecto.",
+  "bodyDescription": "Descripción pública del banner.",
+  "image": {
+    "url": "https://store.solucionesmicaela.com/images/products/banner.png",
+    "altText": "Banner"
+  },
+  "breadcrumbs": [
+    {"name": "Inicio", "url": "https://store.solucionesmicaela.com/"},
+    {"name": "Productos", "url": "https://store.solucionesmicaela.com/productos"},
+    {"name": "Banner", "url": "https://store.solucionesmicaela.com/productos/banner"}
+  ],
+  "links": [],
+  "canonicalUrl": "https://store.solucionesmicaela.com/productos/banner"
+}
+```
+
+Todos los campos están presentes; `type` es `PRODUCT` o `CATEGORY`, los textos y
+URLs son strings, `image` contiene `url`/`altText`, y cada elemento de `breadcrumbs`
+y `links` contiene `name`/`url`. `bodyDescription` puede ser vacío. En categorías,
+`links` contiene los productos devueltos por la consulta pública filtrada por su
+slug, en el orden existente, sin URLs duplicadas ni enlace a sí misma. En productos
+es vacío. Nunca incluye IDs, configuración ERP, precios ni datos administrativos.
+
+Productos: `seoTitle` y `seoDescription` editoriales, recortando espacios; título
+alternativo `{name} | MIQA`; descripción alternativa corta, completa o
+`Explora los productos y soluciones gráficas disponibles de MIQA.`. El cuerpo
+prefiere descripción completa y después corta. Categorías no tienen campos SEO
+independientes: se mantiene `{name} en Trujillo | MIQA` y la fórmula actual Angular
+basada en `catalogDescription`; sin ese texto, `Conoce las opciones de {name} de
+MIQA en Trujillo y solicita una cotización para tu proyecto.`. El cuerpo de categoría
+prefiere `catalogDescription`, después su descripción pública, o string vacío.
+Imagen de producto: activa principal, luego orden/ID, con URL pública absoluta;
+sin imagen usa el logo institucional `/images/brand/logo-miqa3.png`, como Angular.
+Categorías usan ese mismo logo. No se comprueba aquí la disponibilidad HTTP de imágenes.
+Dominio canónico fijo; Host, headers reenviados y parámetros no modifican las URLs.
+
+Alias público de categoría: HTTP 301, cuerpo vacío, `Cache-Control: no-store` y
+`Location: https://store.solucionesmicaela.com/productos/{slug-actual}`. El destino
+es la página del sitio, no otro endpoint de API. El Worker consulta
+con redirects manuales para interpretar el 301. No hay historial de slugs de producto.
+
+Ausente, oculto, no elegible o alias con destino oculto: HTTP 404 JSON con el error
+existente `ApiError`, mensaje genérico y `Cache-Control: no-store`:
+
+```json
+{
+  "timestamp": "2026-10-10T21:00:00Z",
+  "status": 404,
+  "code": "NOT_FOUND",
+  "message": "Recurso no disponible",
+  "path": "/api/public/seo/pages/inexistente",
+  "errors": {}
+}
+```
+
+Fallo interno de consulta/render: HTTP 500 JSON `INTERNAL_ERROR`, mensaje
+`No se pudo completar la solicitud`, sin detalles privados y con `no-store`.
+HEAD conserva el status y las cabeceras sin cuerpo. Spring Security permite la ruta
+por `/api/public/**`; el acceso administrativo sigue protegido. El sitemap y los
+DTO/endpoints existentes no se modificaron. No requiere cambios de esquema,
+migraciones ni dependencias nuevas.
+
+Validacion historica de etapa 1, Java 21/Maven offline: **91 pruebas aprobadas, 0 fallos/errores/omisiones**
+y `package` BUILD SUCCESS. Nuevas: `SeoPageCatalogTest` 13 y `SeoPageHttpTest` 27.
+Regresiones: `CatalogSeoTest`, `SitemapHttpTest`, `PublicErpConfigurationTest`,
+`ErpEditorialCatalogTest`, `ErpConfigurationVersionRegressionTest`,
+`ConfigurationTest`, `ProductionConfigurationTest`, `TestDatabaseIsolationTest`
+y `ManualTestConfigurationTest` (51 en conjunto). Se ejecutó únicamente esa
+selección, sin Boot integrado, JDBC, Flyway ni conexiones reales. Reportes locales
+en `target/surefire-reports`, JAR en `target/miqa-store-backend-0.0.1-SNAPSHOT.jar`.
+En aquella etapa la integracion real quedaba pendiente; backend-Worker ya fue
+verificado localmente, conforme al estado actual confirmado arriba.
+Limitación: las consultas públicas actuales materializan el catálogo/configuración;
+medir coste con catalogos grandes. El Worker desarrollado escapa los textos JSON
+al insertarlos en HTML.
+
 ## SEO dinamico - etapa 1 local
 
 GET publico `/api/public/seo/sitemap.xml`: XML UTF-8 con el dominio canonico
@@ -14,7 +121,7 @@ Los GET publicos de productos (lista y detalle) incluyen `seoTitle` y
 `seoDescription` tal como estan almacenados, incluidos null/vacio, sin cambiar
 publicacion ni reglas comerciales. No requiere migracion ni nuevas dependencias.
 
-Preparado exclusivamente en local: no conectado a `/sitemap.xml` del dominio ni
+Estado historico al finalizar esta etapa: no conectado a `/sitemap.xml` del dominio ni
 a Cloudflare. El sitemap estatico del frontend, redirects y HTML prerenderizado
 siguen intactos. Esta etapa no resuelve SSR ni errores/redirecciones de paginas.
 
