@@ -90,6 +90,8 @@ public class ErpCatalogRepository {
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM erp_catalog_services WHERE erp_service_id = ?)", Boolean.class, id));
     }
     public void bind(String productId, BindingInput input) {
+        if (!Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM products WHERE id = ? AND catalog_mode = 'ERP')", Boolean.class, productId)))
+            throw new com.miqa.store.admin.AdminFailure(409, "La administracion Legacy esta retirada");
         if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM product_erp_bindings WHERE product_id = ? AND canonical AND erp_service_id <> ?)", Boolean.class, productId, input.erpServiceId())))
             throw new com.miqa.store.admin.AdminFailure(409, "La identidad del vinculo canonico no puede reasignarse");
         jdbc.update("""

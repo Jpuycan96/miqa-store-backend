@@ -25,7 +25,7 @@ class ErpCatalogPersistenceIT {
         if (password == null || password.isBlank()) throw new IllegalStateException("TEST_DB_PASSWORD required");
         connection = DriverManager.getConnection("jdbc:postgresql://127.0.0.1:55432/miqa_store_test_db",
                 "miqa_store_local", password);
-        connection.setAutoCommit(false);
+        PostgresTestIsolation.verify(connection);
         jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
         repository = new ErpCatalogRepository(jdbc, JsonMapper.builder().build());
         String suffix = UUID.randomUUID().toString();
@@ -33,18 +33,22 @@ class ErpCatalogPersistenceIT {
         productA = "erp-a-" + suffix;
         productB = "erp-b-" + suffix;
         erpId = new java.math.BigInteger(UUID.randomUUID().toString().replace("-", ""), 16).toString();
-        jdbc.update("INSERT INTO categories(id,name,slug) VALUES (?, 'Synthetic ERP test', ?)", category, category);
+        String categoryErpId = new java.math.BigInteger(UUID.randomUUID().toString().replace("-", ""), 16).add(java.math.BigInteger.ONE).toString();
+        assertThat(repository.trySyncLock()).isTrue();
+        PostgresTestIsolation.fixturesAbsent(jdbc, erpId, categoryErpId, suffix);
+        jdbc.update("INSERT INTO categories(id,name,slug,erp_category_id) VALUES (?, 'Synthetic ERP test', ?, ?)", category, category, categoryErpId);
         for (String product : new String[]{productA, productB}) jdbc.update("""
-                INSERT INTO products(id,category_id,name,slug,short_description,description,sale_type,unit_label)
-                VALUES (?, ?, 'Editorial publication', ?, 'Short', 'Editorial content', 'QUANTITY', 'unidad')
+                INSERT INTO products(id,category_id,name,slug,short_description,description,catalog_mode)
+                VALUES (?, ?, 'Editorial publication', ?, 'Short', 'Editorial content', 'ERP')
                 """, product, category, product);
         var contract = new ErpCatalogClient("", "").decode("[" + ErpCatalogTest.JSON
+                .replace("\"erpCategoryId\":\"3\"", "\"erpCategoryId\":\"" + categoryErpId + "\"")
                 .replace("\"erpServiceId\":\"17\"", "\"erpServiceId\":\"" + erpId + "\"") + "]").getFirst();
         repository.upsert(contract, Instant.now());
     }
     @AfterEach void cleanup() throws Exception {
         if (connection != null) {
-            try { connection.rollback(); } finally { connection.close(); }
+            try { if (!connection.getAutoCommit()) connection.rollback(); } finally { connection.close(); }
         }
     }
     @Test void manyProductsCanShareServiceButDatabaseRejectsContradictoryBindings() throws Exception {
@@ -75,12 +79,19 @@ class ErpCatalogPersistenceIT {
         assertThat(repository.binding(productA).orElseThrow().state()).isEqualTo("AVAILABLE");
         assertThat(jdbc.queryForObject("SELECT payload::text FROM erp_catalog_services WHERE erp_service_id = ?", String.class, erpId)).isEqualTo(payload);
     }
-    @Test void failurePreservesLastSuccessfulSynchronization() {
+    @Test void failurePreservesLastSuccessfulSynchronization() throws Exception {
+        // Schema CHECK(id=1) and repository SQL require the shared singleton.
+        // Exclusive TEST only: row lock, savepoint restoration and outer rollback.
+        var before = jdbc.queryForMap("SELECT * FROM erp_catalog_sync_status WHERE id=1 FOR UPDATE");
+        Savepoint sharedStatus = connection.setSavepoint();
+        try {
         Instant success = Instant.parse("2026-09-29T10:00:00Z");
         repository.success(success, 1, 1, 0);
         repository.failure(success.plusSeconds(5), "ERP_ERROR");
         assertThat(repository.status().succeededAt()).isEqualTo(success);
         assertThat(repository.status().outcome()).isEqualTo("ERP_ERROR");
         assertThat(repository.revisions()).containsKey(erpId);
+        } finally { connection.rollback(sharedStatus); }
+        assertThat(jdbc.queryForMap("SELECT * FROM erp_catalog_sync_status WHERE id=1")).isEqualTo(before);
     }
 }

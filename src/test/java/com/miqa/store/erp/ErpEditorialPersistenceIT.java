@@ -27,7 +27,7 @@ class ErpEditorialPersistenceIT {
         String password = System.getenv("TEST_DB_PASSWORD");
         if (password == null || password.isBlank()) throw new IllegalStateException("TEST_DB_PASSWORD required");
         connection = DriverManager.getConnection("jdbc:postgresql://127.0.0.1:55432/miqa_store_test_db", "miqa_store_local", password);
-        connection.setAutoCommit(false);
+        PostgresTestIsolation.verify(connection);
         jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
         assertThat(jdbc.queryForObject("SELECT current_database()", String.class)).isEqualTo("miqa_store_test_db");
         var mapper = JsonMapper.builder().build();
@@ -37,9 +37,10 @@ class ErpEditorialPersistenceIT {
         erpId = new java.math.BigInteger(suffix.replace("-", ""), 16).toString();
         categoryId = new java.math.BigInteger(UUID.randomUUID().toString().replace("-", ""), 16).toString();
         assertThat(repository.trySyncLock()).isTrue();
+        PostgresTestIsolation.fixturesAbsent(jdbc, erpId, categoryId, suffix);
     }
     @AfterEach void rollback() throws Exception {
-        if (connection != null) try { connection.rollback(); } finally { connection.close(); }
+        if (connection != null) try { if (!connection.getAutoCommit()) connection.rollback(); } finally { connection.close(); }
     }
     private String reconcile(ErpCatalogContract contract) {
         repository.upsert(contract, Instant.now()); repository.reconcile(contract);
@@ -76,7 +77,12 @@ class ErpEditorialPersistenceIT {
         for (String id : List.of("old-a-" + suffix, "old-b-" + suffix)) {
             jdbc.update("INSERT INTO products(id,category_id,name,slug,short_description,description,sale_type,unit_label,published) VALUES (?,?,'Legacy',?,'','History','QUANTITY','unit',true)",
                     id, legacyCategory, id.startsWith("old-a") ? occupied : id);
-            repository.bind(id, new ErpCatalogDtos.BindingInput(erpId, true));
+            // Historical rows are fixtures, never newly allowed Legacy administration.
+            jdbc.update("INSERT INTO product_erp_bindings(product_id,erp_service_id,active,canonical) VALUES (?,?,true,false)", id, erpId);
+            var originalBinding = jdbc.queryForMap("SELECT * FROM product_erp_bindings WHERE product_id=?", id);
+            assertThatThrownBy(() -> repository.bind(id, new ErpCatalogDtos.BindingInput(erpId, false)))
+                    .isInstanceOf(com.miqa.store.admin.AdminFailure.class);
+            assertThat(jdbc.queryForMap("SELECT * FROM product_erp_bindings WHERE product_id=?", id)).isEqualTo(originalBinding);
         }
         // Unchanged revision must still create the missing editorial projection.
         repository.seen(erpId, Instant.now()); repository.reconcile(contract);
@@ -96,6 +102,7 @@ class ErpEditorialPersistenceIT {
         assertThat(repository.binding(principal).orElseThrow().active()).isFalse();
         assertThatThrownBy(() -> repository.bind(principal, new ErpCatalogDtos.BindingInput("1", true))).isInstanceOf(com.miqa.store.admin.AdminFailure.class);
         String sibling = UUID.randomUUID().toString();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM products WHERE id=? OR slug=?", Integer.class, sibling, sibling)).isZero();
         jdbc.update("INSERT INTO products(id,category_id,name,slug,short_description,description,catalog_mode) SELECT ?,category_id,'Sibling',?,'','','ERP' FROM products WHERE id=?", sibling, sibling, principal);
         Savepoint point = connection.setSavepoint();
         assertThatThrownBy(() -> jdbc.update("INSERT INTO product_erp_bindings(product_id,erp_service_id,canonical) VALUES (?,?,true)", sibling, erpId))
@@ -107,6 +114,7 @@ class ErpEditorialPersistenceIT {
         String slug = jdbc.queryForObject("SELECT slug FROM products WHERE id=?", String.class, principal);
         String oldCategory = categoryId;
         categoryId = new java.math.BigInteger(UUID.randomUUID().toString().replace("-", ""), 16).toString();
+        PostgresTestIsolation.categoryAbsent(jdbc, categoryId);
         reconcile(service("b".repeat(64), "Other category " + suffix));
         assertThat(jdbc.queryForObject("SELECT c.erp_category_id FROM products p JOIN categories c ON c.id=p.category_id WHERE p.id=?", String.class, principal)).isEqualTo(categoryId);
         assertThat(jdbc.queryForObject("SELECT slug FROM products WHERE id=?", String.class, principal)).isEqualTo(slug);
@@ -122,6 +130,7 @@ class ErpEditorialPersistenceIT {
                 com.miqa.store.catalog.ProductSaleType.QUANTITY, 5L, "unit", null, null, null, null, null, null, List.of(),
                 new com.miqa.store.quote.QuoteSnapshot.Rules(1, 1, 1000000000L, false, null, null, null), null);
         var key1 = UUID.randomUUID(); var key2 = UUID.randomUUID();
+        assertThat(requests.find(key1)).isEmpty(); assertThat(requests.find(key2)).isEmpty();
         requests.insert(new com.miqa.store.quote.QuoteRequestCanonicalizer.Canonical(key1, "a".repeat(64), input), List.of(snapshot));
         requests.insertV2(new com.miqa.store.quote.QuoteRequestCanonicalizer.Canonical(key2, "b".repeat(64), input),
                 List.of(new com.miqa.store.quote.QuoteV2Dtos.StoredItem(snapshot.productId(), snapshot)));
