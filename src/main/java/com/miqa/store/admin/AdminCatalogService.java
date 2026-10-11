@@ -25,7 +25,11 @@ public class AdminCatalogService {
  @Transactional public CategoryView saveCategory(String id,CategoryInput r){
   slugLock();
   Category c=id==null?new Category():categoryEntity(id);if(id==null)c.setId(id());
-  legacyCategory(c);
+  if(c.getErpCategoryId()!=null){
+   if(!Objects.equals(r.name(),c.getName()))throw new AdminFailure(409,"El nombre de la categoria pertenece al ERP");
+   c.setDescription(r.description());c.setCatalogHeadline(clean(r.catalogHeadline()));c.setCatalogDescription(clean(r.catalogDescription()));c.setActive(r.active());c.setDisplayOrder(r.displayOrder());
+   em.flush();return categoryView(c);
+  }
   String name=r.name().trim();String slug;
   try{slug=id==null?CategorySlug.fromName(name):CategorySlug.forUpdate(c.getName(),c.getSlug(),name);}catch(IllegalArgumentException ex){throw new AdminFailure(400,ex.getMessage());}
   if(!Objects.equals(slug,c.getSlug())){

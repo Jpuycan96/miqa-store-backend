@@ -37,6 +37,11 @@ class ErpEditorialCatalogTest {
         verify(jdbc, never()).update(contains("INSERT INTO product_erp_bindings"), any(Object[].class));
         verify(jdbc, never()).update(contains("SET slug"), any(Object[].class));
         verify(jdbc, never()).update(contains("SET active"), any(Object[].class));
+        var writes = ArgumentCaptor.forClass(String.class);
+        verify(jdbc, atLeastOnce()).update(writes.capture(), any(Object[].class));
+        assertThat(writes.getAllValues()).filteredOn(sql -> sql.startsWith("UPDATE categories"))
+                .allMatch(sql -> !sql.contains("description") && !sql.contains("catalog_headline")
+                        && !sql.contains("catalog_description") && !sql.contains("display_order") && !sql.contains("active"));
     }
 
     @Test void collisionReservesLegacyCategoryAndAliasSlugsWithoutAdoption() {

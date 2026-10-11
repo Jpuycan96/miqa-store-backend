@@ -61,4 +61,25 @@ class AdminErpAuthorityTest {
         assertThatThrownBy(() -> admin.saveCategory("category", new AdminDtos.CategoryInput("Another name", null, null, null, true, 0)))
                 .isInstanceOf(AdminFailure.class);
     }
+
+    @Test void erpCategoryEditorialUpdatePreservesIdentityAndRelationships() {
+        var category = spy(new Category());
+        category.setId("category");category.setName("ERP name");category.setSlug("stable-slug");
+        doReturn("3").when(category).getErpCategoryId();
+        when(categories.findById("category")).thenReturn(Optional.of(category));
+        var result=admin.saveCategory("category",new AdminDtos.CategoryInput("ERP name","Description"," Headline "," Summary ",false,7));
+        assertThat(result.id()).isEqualTo("category");assertThat(result.erpCategoryId()).isEqualTo("3");
+        assertThat(result.name()).isEqualTo("ERP name");assertThat(result.slug()).isEqualTo("stable-slug");
+        assertThat(result.description()).isEqualTo("Description");assertThat(result.catalogHeadline()).isEqualTo("Headline");
+        assertThat(result.catalogDescription()).isEqualTo("Summary");assertThat(result.active()).isFalse();assertThat(result.displayOrder()).isEqualTo(7);
+        verify(em).flush();verify(em,never()).persist(any());verifyNoInteractions(products);
+    }
+
+    @Test void categoryInputRejectsProtectedOrUnknownJsonFields() {
+        var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+        for(String field:java.util.List.of("id","erpCategoryId","erp_category_id","slug","products","categoryId")){
+            String json="{\"name\":\"ERP name\",\"active\":true,\"displayOrder\":0,\""+field+"\":\"tampered\"}";
+            assertThatThrownBy(()->mapper.readValue(json,AdminDtos.CategoryInput.class)).isInstanceOf(RuntimeException.class);
+        }
+    }
 }

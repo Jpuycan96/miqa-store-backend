@@ -1,5 +1,12 @@
 # MIQA Store Backend — contexto de proyecto
 
+## Edicion editorial de categorias ERP - local, 10 de octubre de 2026
+
+- PUT /api/admin/categories/{id} reutilizado: permite description, catalogHeadline, catalogDescription, active y displayOrder en la categoria ERP existente. name debe coincidir exactamente; no modifica UUID, erpCategoryId, slug ni productos. CategoryInput rechaza propiedades JSON desconocidas, incluyendo identificadores y relaciones. DELETE y PATCH active ERP mantienen su bloqueo; la visibilidad se guarda por PUT. POST sigue creando exclusivamente categorias Legacy, sin identidad ERP, por compatibilidad.
+- ErpEditorialCatalog no modificado: la reconciliacion conserva contenido, orden y active de categorias existentes; solo actualiza nombre ERP. Sin migracion ni traspaso de datos Legacy. Contratos publicos y SEO intactos.
+- Validacion aislada sin BD/Flyway/ERP: 76 pruebas backend aprobadas en ocho clases (autoridad, HTTP editorial, sincronizacion y regresiones SEO/sitemap/catalogo). package Maven offline con Java 21 exitoso. Persistencia verificada a nivel servicio/flush con mocks; prueba real PostgreSQL queda pendiente. Sin commit/push/deploy.
+
+
 ## SEO dinamico: estado actual de verificacion local
 
 Resultados confirmados por el propietario para esta entrega; esta actualizacion documental no vuelve a ejecutar pruebas ni builds:
