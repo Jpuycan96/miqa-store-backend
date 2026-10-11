@@ -1,3 +1,25 @@
+## Fase C1: auditoria Legacy exclusivamente PostgreSQL TEST - consolidacion, 11 de octubre de 2026
+
+Resultados confirmados y comunicados por el propietario; esta consolidacion documental no vuelve a ejecutar consultas ni pruebas. Alcance: `miqa_store_test_db`, PostgreSQL 17, puerto 55432, esquema `public`. No se auditaron DEV ni produccion: estos recuentos NO describen el catalogo productivo.
+
+- 5 productos con catalog_mode LEGACY y 0 ERP.
+- 6 categorias sin erp_category_id; 4 no tienen productos.
+- 0 alias historicos de categorias.
+- 1 binding historico: producto `banner`, servicio ERP `1`, activo, no canonico; servicio AVAILABLE. No eliminar el binding ni la proyeccion por considerarlos sin uso.
+- 5 imagenes asociadas a productos Legacy; 0 claves storage_key compartidas entre productos. Esto no demuestra que las URLs o archivos sean exclusivos.
+- 8 referencias de cotizaciones: 1 V1 (`roll-up`) y 7 V2 (`banner`). Los 8 snapshots contienen productId y coinciden con la columna product_id; 0 identificadores diferentes y 0 referencias JSON a productos inexistentes en el alcance auditado.
+- No se inspeccionaron archivos fisicos ni referencias externas. No hay recuentos confirmados de materiales/extras en esta entrega. La ausencia de referencias adicionales no queda acreditada.
+
+Los snapshots, lectura, replay, idempotencia y exportacion historica deben conservarse. Estos resultados no autorizan eliminar productos, categorias, bindings, imagenes, snapshots, tablas ni columnas, ni permiten concluir que un registro productivo sea prescindible.
+
+### Propuesta C1 de limpieza de codigo, pendiente de autorizacion
+
+- Frontend `src/app/features/admin/admin-api.ts`: suggestSlug aparece solo en su declaracion en la busqueda actual; candidato a retirar tras comprobar consumidores en todo el repositorio.
+- Frontend `src/app/features/admin/compact-editor.scss`: selectores material-fields y material-row sin consumidores encontrados en src/app tras retirar OptionEditor. Retirar solo reglas exclusivas demostradas, conservando estilos compartidos; validar formularios e imagenes ERP y su composicion responsive.
+- Backend `src/main/java/com/miqa/store/quote/QuoteCatalog.java`: constructor estatico de snapshots y record Product utilizados por QuoteCatalogTest y QuoteRequestApiTest, sin llamadas de produccion encontradas. No son codigo sin consumidores: investigar un traslado a utilidades de prueba manteniendo aserciones, separado de la limpieza frontend. Conservar el rechazo de nuevas selecciones Legacy y los contratos historicos.
+- Validacion futura: pruebas Angular administrativas, categorias, imagenes, carrito/cotizaciones y compilacion offline (fixtures no publicables); revision visual de estilos si se modifican. Para un eventual refactor backend, QuoteCatalogTest, QuoteRequestApiTest y regresiones de replay/idempotencia/exportacion, con autorizacion TEST independiente si una prueba requiere BD. No ejecutar migraciones ni consultas de escritura como parte de esta limpieza.
+- Riesgos: consumidores fuera de src/app, estilos compartidos y dependencia de fixtures historicos. No retirar DTO, entidades, endpoints compartidos, guardas de rechazo, SEO, sitemap, Worker ni reconciliacion ERP por coincidencias de nombre Legacy.
+
 ## Cierre seguro fase B: pruebas administrativas TEST - local, 10 de octubre de 2026
 
 - Resultados PostgreSQL TEST comunicados por el propietario: ErpCatalogPersistenceIT 3/3, ErpEditorialPersistenceIT 5/5 y ErpCategoryEditorialPersistenceIT 1/1, total 9/9. No reejecutados en este cierre. Este resultado actualiza los pendientes historicos de esas tres pruebas.
